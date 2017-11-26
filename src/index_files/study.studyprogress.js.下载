@@ -1,0 +1,3377 @@
+﻿var chartdata;
+var chartList = [];
+var clickClear = false;
+var totalField = 0;
+var totalQuery = 0;
+var queryPercent = '0.00';
+var totalQueryField = 0;
+var totalPendingQuery = 0;
+var totalFieldPercent = '0';
+var adverseEventCount = 0;
+var adverseEventOccurancy = '0%';
+var seriousAdverseEventCount = 0;
+var seriousAdverseEventOccurancy = '0%';
+var colorarr = ['#22B1E3', '#F5A623', '#22E3AD', '#C1E322', '#E35822'];
+var barBorderRadius = [3, 3, 0, 0];
+var dlg = new MyAppDialog(900, 600);
+
+$(document).ready(function () {
+    GlobalDomain.Init();
+});
+
+/// 全局事件
+var GlobalDomain = {
+    Init: function () {
+        // 查看进展报告权限
+        if (canView) {
+            this.LoadTree();
+            this.GetChartData();
+            this.InitChartInstance();
+        }
+        // 课题计划权限
+        if (canScheduleView) {
+            this.GetStudyScheduleData();
+        }
+        this.RegistScroll();
+        this.RegistResize();
+        this.RegisterEvent();
+        // 任务列表权限
+        if (canTask) {
+            this.GetPendingCnt();
+        }
+        $(window).scroll();
+    },
+    // 加载菜单项
+    LoadTree: function () {
+        $.ajax({
+            type: "POST",
+            url: '/Study/StudyManager/StudyProgressTreeDataListJson/' + studyid,
+            data: null,
+            beforeSend: function (e) { },
+            success: function (r) {
+                for (var i = 0; i < r.length; i++) {
+                    var li = $('<li><a href="' + r[i].attributes.nodecode + '">' + r[i].text + '</a></li>');
+                    $('.leftmenu').append(li);
+                }
+            }
+        });
+    },
+
+    // 获取课题进度数据
+    GetStudyScheduleData: function () {
+        if (studyType == 0 || studyType == 3) {
+            $.ajax({
+                type: "POST",
+                url: "/Study/StudyManager/GetStudyScheduleData/" + studyid,
+                data: null,
+                beforeSend: function (e) { },
+                success: function (r) {
+                    if (r == "") return;
+
+                    if (r.Ret == "0" && r.Content != null && r.Content.length > 0) {
+                        ProgressDomain.LoadEvent(r.Content);
+                    }
+                    else {
+                        $.messager.alert("错误", r.Msg);
+                    }
+                },
+                complete: function () { }
+            });
+        }
+    },
+
+    // 获取所有图表数据
+    GetChartData: function () {
+        $.ajax({
+            type: "POST",
+            url: "/Study/StudyManager/GetChartData/" + studyid,
+            data: null,
+            beforeSend: function (e) { },
+            success: function (rst) {
+                if (rst == "")
+                    return;
+                if (rst.Ret == "0") {
+                    chartdata = rst.Content;
+                    ChartDomian.LoadChart();
+                    GridDomain.LoadGrid();
+                }
+                else {
+                    $.messager.alert("错误", rst.Msg);
+                }
+            },
+            complete: function () { }
+        });
+    },
+
+    // 初始化图表实例
+    InitChartInstance: function () {
+        $('div[tag="chart"]').each(function () {
+            var Instance = echarts.init(document.getElementById($(this).attr('id')), macaronsTheme);
+            Instance.showLoading({
+                text: '正在处理，请稍后...'
+            });
+            chartList.push({
+                Id: $(this).attr('id'),
+                IsSet: false,
+                ChartInstance: Instance,
+                Data: null
+            });
+        });
+    },
+
+    // 计算进展报告滚动高度
+    RegistScroll: function () {
+        $(window).scroll(function () {
+            var $reportContent = $("#report_content");
+            // this for hide/show button to-top
+            var reportTop = $reportContent.length > 0 ? $reportContent.offset().top : 0;
+            var width = $reportContent.innerWidth() - 20;
+            if ($(this).scrollTop() > reportTop - 15) {
+                $reportContent.find(".sy-prTitle").css("position", "fixed");
+                $reportContent.find(".sy-prTitle").css("top", 44);
+                $reportContent.find(".sy-prTitle").css("width", width + 20);
+                $reportContent.find(".leftmenu").css("position", "fixed");
+                $reportContent.find(".leftmenu").css("top", 44 + 36);
+                $reportContent.css("padding-top", 44 + 36);
+                $reportContent.find(".box-title").css("margin-top", -90);
+                $reportContent.find(".box-title").css("padding-top", 95);
+            } else {
+                $reportContent.find(".sy-prTitle").css("position", "relative");
+                $reportContent.find(".sy-prTitle").css("top", "");
+                $reportContent.find(".sy-prTitle").css("width", "100%");
+                $reportContent.find(".leftmenu").css("position", "absolute");
+                $reportContent.find(".leftmenu").css("top", 0);
+                $reportContent.css("padding-top", 0);
+                $reportContent.find(".box-title").css("margin-top", 0);
+                $reportContent.find(".box-title").css("padding-top", 5);
+            }
+        });
+    },
+
+    // 窗口缩放事件
+    RegistResize: function () {
+        window.onresize = function () {
+            $(window).scroll();
+            if (!$('.chartContent').is(':hidden')) {
+                for (var i = 0; i < chartList.length; i++) {
+                    chartList[i].ChartInstance.resize();
+                }
+            }
+            if (!$('.progressContent').is(':hidden')) {
+                GlobalDomain.ProgressResize();
+                $('#IntoGroupProgressbar').progressbar('resize');
+            }
+        }
+    },
+
+    ProgressResize: function () {
+        var width = $('#StudyProgress').width();
+        var counter = $('.imgList li').length;
+        $('.imgList li').css('width', (width * 0.9) / counter);
+        GlobalDomain.Progressbar();
+    },
+
+    Progressbar: function () {
+        var barvalue = requirePatientCnt == 0 ? 0 : ((IngroupPatientCnt / requirePatientCnt) * 100).toFixed(2);
+        barvalue = barvalue > 100 ? 100 : barvalue;
+        if (requirePatientCnt > 0) {
+            $('#IntoGroupProgressbar').progressbar('setValue', barvalue);
+        }
+    },
+
+    // 注册Click事件
+    RegisterEvent: function () {
+        // 显示折叠
+        $(".sy-prTitle").click(function () {
+            $(this).siblings(".sy-prContent").slideToggle(500, function () {
+                $(window).resize();
+            });
+        });
+        // 导出全部图片
+        $('.export-images').click(function (e) {
+            e.stopPropagation();
+            ExportDomain.ExportImage();
+        });
+        // 伸缩事件
+        $("[data-toggle=dropdown]").click(function () {
+            var $obj = $(this).closest(".dropdown");
+            if ($obj.hasClass("open")) {
+                $obj.removeClass("open");
+            } else {
+                $obj.addClass("open");
+            }
+        });
+    },
+
+    // 获取待核查数据
+    GetPendingCnt: function () {
+        $.ajax({
+            type: "POST",
+            url: "/Study/QualityMonitor/GetPendingTaskCount",
+            data: { studyId: studyid },
+            beforeSend: function (e) { },
+            success: function (r) {
+                layer.closeAll();
+                if (r.Ret == "0" && r.Content != null) {
+                    var ctobject = r.Content;
+                    console.log(ctobject);
+                    // 签名
+                    if (ctobject.PendingSign > 0) {
+                        $("#TaskPendingSign").removeClass("hidden");
+                        $(".PendingSign").html(ctobject.PendingSign);
+                    }
+                    // 开放 & 重启
+                    if (ctobject.PendingQueryOpen > 0 || ctobject.PendingQueryReopened > 0) {
+                        $("#TaskPendingQueryOpen").removeClass("hidden");
+                        $(".PendingQueryOpen").html(ctobject.PendingQueryOpen);
+                        $(".PendingQueryReopened").html(ctobject.PendingQueryReopened);
+                    }
+                    // 已回复
+                    if (ctobject.PendingQueryReplay > 0) {
+                        $("#TaskPendingQueryReplay").removeClass("hidden");
+                        $(".PendingQueryReplay").html(ctobject.PendingQueryReplay);
+                    }
+                    // 未认领
+                    //if (ctobject.NoClaim > 0) {
+                    //    $("#TaskNoClaim").removeClass("hidden");
+                    //    $(".NoClaim").html(ctobject.NoClaim);
+                    //}
+                    //// 未录入
+                    //if (ctobject.NoInput > 0) {
+                    //    $("#TaskNoInput").removeClass("hidden");
+                    //    $(".NoInput").html(ctobject.NoInput);
+                    //}
+                    //// 未发布
+                    //if (ctobject.NoPublish > 0) {
+                    //    $("#TaskNoPublish").removeClass("hidden");
+                    //    $(".NoPublish").html(ctobject.NoPublish);
+                    //}
+                }
+            },
+            complete: function () { }
+        });
+        // 待核查
+        $.ajax({
+        type: "POST",
+        url: "/Study/QualityMonitor/GetCheckCount",
+            data: { studyId: studyid },
+            beforeSend: function (e) { },
+            success: function (r) {
+                layer.closeAll();
+                var PendingCheck = parseInt(r);
+                if (PendingCheck > 0) {
+                    $("#TaskPendingCheck").removeClass("hidden");
+                    $(".PendingCheck").html(PendingCheck);
+                }
+            },
+            complete: function () { }
+        });
+        // 冻结
+        $.ajax({
+            type: "POST",
+            url: "/Study/QualityMonitor/GetFrozenCount",
+            data: { studyId: studyid },
+            beforeSend: function (e) { },
+            success: function (r) {
+                layer.closeAll();
+                var PendingFrozen = parseInt(r);
+                if (PendingFrozen > 0) {
+                    $("#TaskPendingFrozen").removeClass("hidden");
+                    $(".PendingFrozen").html(PendingFrozen);
+                }
+            },
+            complete: function () { }
+        });
+        // 锁定
+        $.ajax({
+            type: "POST",
+            url: "/Study/QualityMonitor/GetLockCount",
+            data: { studyId: studyid },
+            beforeSend: function (e) { },
+            success: function (r) {
+                layer.closeAll();
+                var PendingLock = parseInt(r);
+                if (PendingLock > 0) {
+                    $("#TaskPendingLock").removeClass("hidden");
+                    $(".PendingLock").html(PendingLock);
+                }
+            },
+            complete: function () { }
+        });
+    }
+}
+
+/// 图表事件
+var ChartDomian = {
+    // 图表展示
+    LoadChart: function () {
+        var option;
+        for (var i = 0; i < chartList.length; i++) {
+            if (chartdata[chartList[i].Id] == undefined) {
+                continue;
+            }
+            var data = JSON.parse(chartdata[chartList[i].Id]);
+            switch (chartList[i].Id) {
+                case "IntoGroup":
+                    // 各中心入组情况
+                    option = this.ChartIntoGroup(data);
+                    break;
+                case "IntoGroupProgress":
+                    // 入组进度
+                    option = this.ChartIntoGroupProgress(data);
+                    break;
+                case "MuiltisiteInsertData":
+                    // 各中心录入字段数
+                    option = this.ChartInsertData(data);
+                    break;
+                case "MuiltisiteInsertDataComplete":
+                    // 各中心单位病例录入字段数
+                    option = this.ChartMuiltisiteInsertDataComplete(data);
+                    break;
+                case "SiteSDV":
+                    // 各中心数据SDV情况
+                    option = this.ChartSiteSDV(data);
+                    break;
+                case "SectionSDV":
+                    // 各模块数据SDV情况
+                    option = this.ChartSectionSDV(data);
+                    break;
+                case "SitePendingQuery":
+                    // 各中心待回复质疑数
+                    option = this.ChartSitePendingQuery(data);
+                    break;
+                case "SiteQuery":
+                    // 各中心质疑数
+                    option = this.ChartSiteQuery(data);
+                    break;
+                case "QueryRate":
+                    // 各中心单位病例质疑数
+                    option = this.ChartQueryRate(data);
+                    break;
+                case "DataQueryCount":
+                    // 各模块质疑数
+                    option = this.ChartDataQueryCount(data);
+                    break;
+                case "SiteAdversedEvents":
+                    // 各中心不良事件数
+                    option = this.ChartSiteAdversedEvents(data);
+                    break;
+                case "SiteAdversedEventsOccurancy":
+                    // 各中心不良事件发生率
+                    option = this.ChartSiteAdversedEventsOccurancy(data);
+                    break;
+                case "AdversedEvents":
+                    // 各不良事件数
+                    option = this.ChartAdversedEvents(data);
+                    break;
+                case "AdversedEventsOccurancy":
+                    // 各不良事件发生率
+                    option = this.ChartAdversedEventsOccurancy(data);
+                    break;
+                case "SiteSeriousAdversedEvents":
+                    // 各中心严重不良事件数
+                    option = this.ChartSiteSeriousAdversedEvents(data);
+                    break;
+                case "SiteSeriousAdversedEventsOccurancy":
+                    // 各中心严重不良事件发生率
+                    option = this.ChartSiteSeriousAdversedEventsOccurancy(data);
+                    break;
+                case "SeriousAdversedEvents":
+                    // 各严重不良事件数
+                    option = this.ChartSeriousAdversedEvents(data);
+                    break;
+                case "SeriousAdversedEventsOccurancy":
+                    // 各严重不良事件发生率
+                    option = this.ChartSeriousAdversedEventsOccurancy(data);
+                    break;
+                //case "InsertVisitComplete":
+                //    option = this.ChartInsertVisitComplete(data);
+                //    break;
+                //case "InsertSectionComplete":
+                //    option = this.ChartInsertSectionComplete(data);
+                //    break;
+                //case "QueryLabelData":
+                //    option = this.ChartQueryLabelData(data);
+                //    break;
+                default:
+                    option = {};
+                    break;
+            }
+            chartList[i].ChartInstance.hideLoading();
+            chartList[i].ChartInstance.setOption(option, true);
+        }
+    },
+
+    // 入组情况[柱状图]
+    ChartIntoGroup: function (data) {
+        var legendData = [], xAxisdata = [], seriesdata = new Array();
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#IntoGroup").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                if ($.inArray(data[i].Armname, legendData) == -1) {
+                    legendData.push(data[i].Armname);
+                    seriesdata[data[i].Armname] = [];
+                }
+                seriesdata[data[i].Armname].push(data[i].PatientCount);
+            }
+        }
+
+        var option = {
+            title: {
+                text: studyType == "0" ? '各中心入组情况' : '各中心病例录入情况',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var count = 0;
+                    var str = '中心编号：' + params[0].name.SiteCode.replace('中心', '');
+                    str += '<br />';
+                    str += '中心名称：' + params[0].name.SiteName;
+                    str += "<br />";
+                    if (params.length > 1) {
+                        for (var i = 0; i < params.length; i++) {
+                            str += params[i].seriesName;
+                            str += "：";
+                            str += params[i].value;
+                            str += "<br />";
+                            count += params[i].value;
+                        }
+                        str += "入组总例数";
+                        str += "：";
+                        str += count;
+                        str += "<br />";
+                    }
+                    else {
+                        str += "入组病例数";
+                        str += "：";
+                        str += params[0].value;
+                        str += "<br />";
+                    }
+                    return str;
+                }
+            },
+            xAxis: {
+                name: '中心编号',
+                splitLine: {
+                    show: false
+                },
+                data: xAxisdata,
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (value, index) {
+                        return value == null ? value : value.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                name: studyType == "0" ? '入组例数' : '录入病例数',
+                splitLine: {
+                    show: false
+                },
+            },
+            itemStyle: {
+                normal: {
+                    barBorderRadius: barBorderRadius
+                },
+                emphasis: {
+                    barBorderRadius: barBorderRadius
+                }
+            },
+            dataZoom: {
+                type: 'slider',
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '2%',
+                left: 'auto',
+            },
+            series: [],
+            color: colorarr,
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(1100, 650);
+                            dlg.setURL("各中心病例统计", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressPatientBySite");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+            }
+        }
+
+        for (var i = 0; i < legendData.length; i++) {
+            option.series.push({
+                name: legendData[i],
+                stack: studyType == "0" ? '入组例数' : '录入病例数',
+                type: 'bar',
+                data: seriesdata[legendData[i]],
+                barMaxWidth: '40',
+                label: {
+                    normal: {
+                        show: true,
+                        position: 'top',
+                        formatter: function (param) {
+                            return param.value > 0 ? param.value : '';
+                        }
+                    }
+                },
+                itemStyle: {
+                    normal: {
+                        barBorderRadius: barBorderRadius
+                    },
+                    emphasis: {
+                        barBorderRadius: barBorderRadius
+                    }
+                }
+            });
+        }
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 入组进度[折线图]
+    ChartIntoGroupProgress: function (data) {
+        var xAxisdata = [], seriesdataMTD = [], seriesdataMonthlyPatient = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#IntoGroupProgress").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                xAxisdata.push(data[i].MonthName);
+                seriesdataMonthlyPatient.push(data[i].MonthlyPatient);
+                seriesdataMTD.push(data[i].MTD);
+            }
+        }
+        //var estimated = JSON.parse(chartdata['Estimated']);
+        var option = {
+            title: {
+                text: studyType == "0" ? '入组进度' : '录入进度',
+                // 预计完成入组时间
+                //subtext: studyType == "9" ? '' : (estimated[0].EstimatedYear == -1 ? '已完成入组' : '按平均每月' + (studyType == "0" ? '入组' : '录入') + '数计算，预计' + estimated[0].EstimatedYear + '年' + estimated[0].EstimatedMonth + '月' + '完成入组。'),
+                left: 'center',
+                top: 10,
+            },
+            grid: {
+                top: 90
+            },
+            tooltip: {
+                trigger: 'axis',
+            },
+            legend: {
+                left: 'center',
+                top: 55,
+                data: ["月新增病例数", studyType == "0" ? "累计入组总例数" : "累计录入总病例数"]
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(1000, 600);
+                            dlg.setURL("录入进度详情", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressIntogroupDetail");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+            },
+            xAxis: {
+                name: '时间',
+                type: 'category',
+                data: xAxisdata,
+                splitLine: {
+                    show: false
+                },
+            },
+            yAxis: [{
+                name: studyType == "0" ? '入组例数' : '录入病例数',
+                type: 'value',
+                splitLine: {
+                    show: false
+                },
+            }],
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            color: colorarr,
+            series: [
+                {
+                    name: '月新增病例数',
+                    type: 'bar',
+                    data: seriesdataMonthlyPatient,
+                    barMaxWidth: '40',
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                },
+                {
+                    name: studyType == "0" ? '累计入组总例数' : '累计录入总病例数',
+                    type: 'line',
+                    data: seriesdataMTD,
+                }
+            ]
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各中心录入字段数[柱状图]
+    ChartInsertData: function (data) {
+        data = $.Enumerable.From(data).OrderByDescending(function (o) {
+            return o.FieldCount;
+        }).ToArray();
+
+        var xAxisdata = [], seriescountdata = [], seriescompletedata = [];
+
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#MuiltisiteInsertData").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+
+                seriescountdata.push(data[i].FieldCount);
+            }
+        }
+
+        option = {
+            title: {
+                text: '各中心录入字段数',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var op = '中心编号：' + params[0].name.SiteCode.replace('中心', '') + '<br />' +
+                             '中心名称：' + params[0].name.SiteName + '<br />';
+                    for (var i = 0; i < params.length; i++) {
+                        op += params[i].seriesName + '：' + params[i].value + '<br />';
+                    }
+                    return op;
+                },
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    //myTool: {
+                    //    show: true,
+                    //    title: '查看详情',
+                    //    icon: 'image:///Content/images/jiantou.png',
+                    //    onclick: function () {
+                    //        dlg.setSize(1000, 600);
+                    //        dlg.setURL("各中心录入字段数统计", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressFieldDetailBySite");
+                    //        dlg.show();
+                    //    }
+                    //},
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+            },
+            xAxis: {
+                name: '中心编号',
+                splitLine: {
+                    show: false
+                },
+                data: xAxisdata,
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (value, index) {
+                        return value == null ? value : value.SiteCode;
+                    }
+                }
+            },
+            yAxis: [{
+                name: '录入字段数',
+                type: 'value',
+                splitLine: {
+                    show: false,
+                }
+            }],
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [{
+                name: '录入字段数',
+                type: 'bar',
+                barMaxWidth: '40',
+                data: seriescountdata,
+                label: {
+                    normal: {
+                        show: true,
+                        position: 'top',
+                    }
+                },
+                itemStyle: {
+                    normal: {
+                        barBorderRadius: barBorderRadius
+                    },
+                    emphasis: {
+                        barBorderRadius: barBorderRadius
+                    }
+                }
+            }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各中心单位病例录入字段数[柱状图]
+    ChartMuiltisiteInsertDataComplete: function (data) {
+        data = $.Enumerable.From(data).OrderByDescending(function (o) {
+            return o.FieldCountComplete;
+        }).ToArray();
+
+        var xAxisdata = [], seriescountdata = [], seriescompletedata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#MuiltisiteInsertDataComplete").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                seriescompletedata.push((data[i].FieldCountComplete).toFixed(0));
+            }
+        }
+
+        option = {
+            title: {
+                text: "各中心单位病例录入字段数（入组）",
+                left: 'center',
+                top: 10,
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    //myTool: {
+                    //    show: true,
+                    //    title: '查看详情',
+                    //    icon: 'image:///Content/images/jiantou.png',
+                    //    onclick: function () {
+                    //        dlg.setSize(1000, 600);
+                    //        dlg.setURL("各中心录入字段数统计", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressFieldDetailBySite");
+                    //        dlg.show();
+                    //    }
+                    //},
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var op = '中心编号：' + params[0].name.SiteCode.replace('中心', '') + '<br />' +
+                             '中心名称：' + params[0].name.SiteName + '<br />';
+                    for (var i = 0; i < params.length; i++) {
+                        op += params[i].seriesName + '：' + params[i].value + '<br />';
+                    }
+                    return op;
+                }
+            },
+            xAxis: {
+                name: '中心编号',
+                splitLine: {
+                    show: false
+                },
+                data: xAxisdata,
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (value, index) {
+                        return value == null ? value : value.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '单位病例录入字段数',
+                splitLine: {
+                    show: false
+                }
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [{
+                name: "单位病例录入字段数",
+                type: 'bar',
+                barMaxWidth: '40',
+                data: seriescompletedata,
+                label: {
+                    normal: {
+                        show: true,
+                        position: 'top',
+                        formatter: '{c0}',
+                    }
+                },
+                itemStyle: {
+                    normal: {
+                        barBorderRadius: barBorderRadius
+                    },
+                    emphasis: {
+                        barBorderRadius: barBorderRadius
+                    }
+                }
+            }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各中心数据SDV情况
+    ChartSiteSDV: function (data) {
+        data = $.Enumerable.From(data).OrderByDescending(function (o) {
+            return o.SDVComplete;
+        }).ToArray();
+
+        var xAxisdata = [], sdvdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#SiteSDV").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                sdvdata.push((data[i].SDVComplete * 100).toFixed(1));
+            }
+        }
+
+        option = {
+            title: {
+                text: "各中心数据SDV情况",
+                left: 'center',
+                top: 10,
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(1000, 600);
+                            dlg.setURL("各中心数据SDV情况统计", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressSDVDetailBySite");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: function (params) {
+                    return '中心编号：' + params.name.SiteCode.replace('中心', '') + '<br />' +
+                           '中心名称：' + params.name.SiteName + '<br />' +
+                           'SDV完成度：' + params.value + '%';
+                }
+            },
+            xAxis: {
+                name: '中心编号',
+                splitLine: {
+                    show: false
+                },
+                data: xAxisdata,
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (value, index) {
+                        return value == null ? value : value.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: 'SDV完成度',
+                splitLine: {
+                    show: false
+                },
+                axisLabel: {
+                    formatter: function (value, index) {
+                        return value + "%";
+                    }
+                },
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [{
+                name: "SDV完成度",
+                type: 'bar',
+                barMaxWidth: '40',
+                data: sdvdata,
+                label: {
+                    normal: {
+                        show: true,
+                        position: 'top',
+                        formatter: '{c0}%',
+                    }
+                },
+                itemStyle: {
+                    normal: {
+                        barBorderRadius: barBorderRadius
+                    },
+                    emphasis: {
+                        barBorderRadius: barBorderRadius
+                    }
+                }
+            }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各模块数据SDV情况
+    ChartSectionSDV: function (data) {
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#SectionSDV").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                xAxisdata.push(data[i].Section);
+                seriesdata.push((data[i].SDVComplete * 100).toFixed(1));
+            }
+        }
+        option = {
+            title: {
+                text: '各模块数据SDV情况',
+                //subtext: isMuiltisite == 0 ? ('录入字段总数：' + totalField + ";单位病例录入字段数：" + totalFieldPercent) : '',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: '模块名称： {b}<br />{a0}： {c0}%',
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(850, 700);
+                            dlg.setURL("各模块数据SDV情况", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressSDVDetailBySection");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+            },
+            xAxis: {
+                type: 'category',
+                name: '模块名称',
+                data: xAxisdata,
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (value, index) {
+                        if (value != undefined && value.length > 6 && xAxisdata.length > 10) {
+                            return value.substr(0, 5) + '..';
+                        } else {
+                            return value;
+                        }
+                    }
+                },
+                splitLine: {
+                    show: false,
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: 'SDV完成度',
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    formatter: function (value, index) {
+                        return value + "%";
+                    }
+                },
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: 'SDV完成度',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                            formatter: '{c0}%',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各不良事件数[柱状图]，拆成多图显示
+    ChartAdversedEvents: function (data) {
+        $("#AdversedEvents").hide();
+        if (data != undefined && data.length > 0) {
+            // 根据分组名称来分组
+            var arms = $.Enumerable.From(data).GroupBy(function (o) { return o.Armname }).ToArray();
+            var axisMax = $.Enumerable.From(data).Max(function (o) { return o.AdverseEventsCount });
+            for (var i = 0; i < arms.length; i++) {
+                // 新建实例
+                var chart = '<div id="AdversedEvents_' + i + '" tag="chart" class="sy-prReport"></div>';
+                if (!$('div[id^=AdversedEvents_]').length) {
+                    $('#AdversedEvents').after(chart);
+                } else {
+                    $('div[id^=AdversedEvents_]').last().after(chart);
+                }
+                var Instance = echarts.init(document.getElementById('AdversedEvents_' + i), macaronsTheme);
+                Instance.showLoading({
+                    text: '正在处理，请稍后...'
+                });
+                chartList.push({
+                    Id: 'AdversedEvents_' + i,
+                    IsSet: false,
+                    ChartInstance: Instance,
+                    Data: null
+                });
+                // 准备数据
+                var armdata = $.Enumerable.From(arms[i].source).OrderByDescending(function (o) { return o.AdverseEventsCount }).ToArray();
+                var legendData = $.Enumerable.From(armdata).Select(function (o) { return o.Armname }).Distinct().ToArray();
+                var yAxisdata = $.Enumerable.From(armdata).Select(function (o) { return o.AdverseEvents }).Distinct().ToArray();
+                var seriesdata = $.Enumerable.From(armdata).Select(function (o) { return o.AdverseEventsCount }).ToArray();
+                var option = {
+                    title: {
+                        text: '各不良事件数',
+                        left: 'center',
+                        top: 10,
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: function (params) {
+                            var str = params[0].name;
+                            if (legendData.length == 1) {
+                                str += '：' + params[0].value;
+                            } else {
+                                str += "<br />";
+                                for (var i = 0; i < params.length; i++) {
+                                    str += params[i].seriesName;
+                                    str += "：";
+                                    str += params[i].value;
+                                    str += "<br />";
+                                }
+                            }
+                            return str;
+                        }
+                    },
+                    xAxis: {
+                        name: '不良事件数',
+                        type: 'value',
+                        splitLine: {
+                            show: false
+                        },
+                        splitArea: false,
+                        formatter: function (params) {
+                            return Math.abs(params.value);
+                        },
+                        axisLabel: {
+                            show: false,
+                        },
+                        axisTick: {
+                            show: false
+                        },
+                        max: axisMax
+                    },
+                    yAxis: {
+                        name: '不良事件名称',
+                        type: 'category',
+                        data: yAxisdata.reverse(),
+                        splitLine: {
+                            show: false
+                        },
+                        axisLabel: {
+                            formatter: function (value, index) {
+                                return value.substring(0, 6);
+                            }
+                        }
+                    },
+                    legend: {
+                        top: 35,
+                        data: (arms.length == 1 && legendData[0] == '-') ? [] : legendData,
+                    },
+                    color: colorarr,
+                    series: [{
+                        name: legendData[0],
+                        type: 'bar',
+                        barMaxWidth: '15',
+                        data: seriesdata.reverse(),
+                        label: {
+                            normal: {
+                                show: true,
+                                position: 'right',
+                                formatter: function (params) {
+                                    if (params.value != 0) {
+                                        return Math.abs(params.value);
+                                    } else {
+                                        return '';
+                                    }
+                                },
+                            }
+                        },
+                        itemStyle: {
+                            normal: {
+                                barBorderRadius: [0, 3, 3, 0]
+                            },
+                            emphasis: {
+                                barBorderRadius: [0, 3, 3, 0]
+                            }
+                        }
+                    }],
+                    toolbox: {
+                        show: true,
+                        right: 40,
+                        top: 20,
+                        feature: {
+                            myTool: {
+                                show: true,
+                                title: '查看详情',
+                                icon: 'image:///Content/images/jiantou.png',
+                                onclick: function (opts) {
+                                    dlg.setSize(1000, 700);
+                                    dlg.setURL("各不良事件发生情况", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressAdverseEventsDetail," + encodeURIComponent(opts.option.legend[0].data.length ? opts.option.legend[0].data[0] : '-'));
+                                    dlg.show();
+                                }
+                            },
+                            saveAsImage: this.InitSaveAsImage({ name: '不良事件数量' })
+                        }
+                    },
+                };
+                // 给实例赋值
+                Instance.hideLoading();
+                Instance.setOption(option, true);
+            }
+        }
+        return {};
+    },
+
+    // 不良事件发生率[柱状图]，拆成多图显示
+    ChartAdversedEventsOccurancy: function (data) {
+        $("#AdversedEventsOccurancy").hide();
+        if (data == undefined || data.length == 0) return {};
+        // 根据分组名称来分组
+        var arms = $.Enumerable.From(data).GroupBy(function (o) { return o.Armname }).ToArray();
+        var axisMax = $.Enumerable.From(data).Max(function (o) { return (o.AdverseEventsOccurancy * 100).toFixed(1) });
+        for (var i = 0; i < arms.length; i++) {
+            // 新建实例
+            var chart = '<div id="AdversedEventsOccurancy_' + i + '" tag="chart" class="sy-prReport"></div>';
+            if (!$('div[id^=AdversedEventsOccurancy_]').length) {
+                $('#AdversedEventsOccurancy').after(chart);
+            } else {
+                $('div[id^=AdversedEventsOccurancy_]').last().after(chart);
+            }
+            var Instance = echarts.init(document.getElementById('AdversedEventsOccurancy_' + i), macaronsTheme);
+            Instance.showLoading({
+                text: '正在处理，请稍后...'
+            });
+            chartList.push({
+                Id: 'AdversedEventsOccurancy_' + i,
+                IsSet: false,
+                ChartInstance: Instance,
+                Data: null
+            });
+            // 准备数据
+            var armdata = $.Enumerable.From(arms[i].source).OrderByDescending(function (o) { return o.AdverseEventsOccurancy }).ToArray();
+            var legendData = $.Enumerable.From(armdata).Select(function (o) { return o.Armname }).Distinct().ToArray();
+            var yAxisdata = $.Enumerable.From(armdata).Select(function (o) { return o.AdverseEvents }).Distinct().ToArray();
+            var seriesdata = $.Enumerable.From(armdata).Select(function (o) { return (o.AdverseEventsOccurancy * 100).toFixed(1) }).ToArray();
+            var option = {
+                title: {
+                    text: '各不良事件发生率',
+                    left: 'center',
+                    top: 10,
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function (params) {
+                        var str = params[0].name + '（发生率）';
+                        if (legendData.length == 1) {
+                            str += '：' + params[0].value + '%';
+                        } else {
+                            str += "<br />";
+                            for (var i = 0; i < params.length; i++) {
+                                str += params[i].seriesName;
+                                str += "：";
+                                str += params[i].value + '%';
+                                str += "<br />";
+                            }
+                        }
+                        return str;
+                    }
+                },
+                xAxis: {
+                    name: '不良事件发生率',
+                    type: 'value',
+                    max: 100,
+                    axisLabel: {
+                        formatter: function (value, index) {
+                            return value + "%";
+                        }
+                    },
+                    splitLine: {
+                        show: false
+                    },
+                    splitArea: false,
+                    axisLabel: {
+                        show: false,
+                    },
+                    axisTick: {
+                        show: false
+                    }
+                },
+                yAxis: {
+                    name: '不良事件名称',
+                    type: 'category',
+                    data: yAxisdata.reverse(),
+                    splitLine: {
+                        show: false
+                    },
+                    axisLabel: {
+                        formatter: function (value, index) {
+                            return value.substring(0, 6);
+                        }
+                    }
+                },
+                legend: {
+                    top: 35,
+                    data: (arms.length == 1 && legendData[0] == '-') ? [] : legendData
+                },
+                color: colorarr,
+                series: [{
+                    name: legendData[0],
+                    type: 'bar',
+                    barMaxWidth: '15',
+                    data: seriesdata.reverse(),
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'right',
+                            formatter: function (params) {
+                                if (params.value >= 0) {
+                                    return params.value + '%';
+                                } else {
+                                    return '';
+                                }
+                            },
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: [0, 3, 3, 0]
+                        },
+                        emphasis: {
+                            barBorderRadius: [0, 3, 3, 0]
+                        }
+                    }
+                }],
+                toolbox: {
+                    show: true,
+                    right: 40,
+                    top: 20,
+                    feature: {
+                        myTool: {
+                            show: true,
+                            title: '查看详情',
+                            icon: 'image:///Content/images/jiantou.png',
+                            onclick: function (opts) {
+                                dlg.setSize(1000, 700);
+                                dlg.setURL("各不良事件发生情况", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressAdverseEventsDetail," + encodeURIComponent(opts.option.legend[0].data.length ? opts.option.legend[0].data[0] : '-'));
+                                dlg.show();
+                            }
+                        },
+                        saveAsImage: this.InitSaveAsImage({ name: '不良事件发生率' })
+                    }
+                },
+            };
+            // 给实例赋值
+            Instance.hideLoading();
+            Instance.setOption(option, true);
+        }
+        return {};
+    },
+
+    // 严重不良事件数量[柱状图]，拆成多图显示
+    ChartSeriousAdversedEvents: function (data) {
+        $("#SeriousAdversedEvents").hide();
+        if (data == undefined || data.length == 0) return {};
+        // 根据分组名称来分组
+        var arms = $.Enumerable.From(data).GroupBy(function (o) { return o.Armname }).ToArray();
+        var axisMax = $.Enumerable.From(data).Max(function (o) { return o.SeriousAdverseEventsCount });
+        for (var i = 0; i < arms.length; i++) {
+            // 新建实例
+            var chart = '<div id="SeriousAdversedEvents_' + i + '" tag="chart" class="sy-prReport"></div>';
+            if (!$('div[id^=SeriousAdversedEvents_]').length) {
+                $('#SeriousAdversedEvents').after(chart);
+            } else {
+                $('div[id^=SeriousAdversedEvents_]').last().after(chart);
+            }
+            var Instance = echarts.init(document.getElementById('SeriousAdversedEvents_' + i), macaronsTheme);
+            Instance.showLoading({
+                text: '正在处理，请稍后...'
+            });
+            chartList.push({
+                Id: 'SeriousAdversedEvents_' + i,
+                IsSet: false,
+                ChartInstance: Instance,
+                Data: null
+            });
+            // 准备数据
+            var armdata = $.Enumerable.From(arms[i].source).OrderByDescending(function (o) { return o.SeriousAdverseEventsCount }).ToArray();
+            var legendData = $.Enumerable.From(armdata).Select(function (o) { return o.Armname }).Distinct().ToArray();
+            var yAxisdata = $.Enumerable.From(armdata).Select(function (o) { return o.SeriousAdverseEvents }).Distinct().ToArray();
+            var seriesdata = $.Enumerable.From(armdata).Select(function (o) { return o.SeriousAdverseEventsCount }).ToArray();
+            var option = {
+                title: {
+                    text: '各严重不良事件数',
+                    left: 'center',
+                    top: 10,
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function (params) {
+                        var str = params[0].name;
+                        if (legendData.length == 1) {
+                            str += '：' + params[0].value;
+                        } else {
+                            str += "<br />";
+                            for (var i = 0; i < params.length; i++) {
+                                str += params[i].seriesName;
+                                str += "：";
+                                str += params[i].value;
+                                str += "<br />";
+                            }
+                        }
+                        return str;
+                    }
+                },
+                toolbox: {
+                    show: true,
+                    right: 40,
+                    top: 20,
+                    feature: {
+                        myTool: {
+                            show: true,
+                            title: '查看详情',
+                            icon: 'image:///Content/images/jiantou.png',
+                            onclick: function (opts) {
+                                dlg.setSize(1000, 700);
+                                dlg.setURL("各严重不良事件发生情况", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressSeriousAdverseEventsDetail," + encodeURIComponent(opts.option.legend[0].data.length ? opts.option.legend[0].data[0] : '-'));
+                                dlg.show();
+                            }
+                        },
+                        saveAsImage: this.InitSaveAsImage({ name: '严重不良事件数量' })
+                    }
+                },
+                xAxis: {
+                    name: '严重不良事件发生数',
+                    type: 'value',
+                    splitLine: {
+                        show: false
+                    },
+                    splitArea: false,
+                    axisLabel: {
+                        show: false,
+                    },
+                    axisTick: {
+                        show: false
+                    },
+                    max: axisMax
+                },
+                yAxis: {
+                    name: '严重不良事件名称',
+                    type: 'category',
+                    data: yAxisdata.reverse(),
+                    splitLine: {
+                        show: false
+                    },
+                    axisLabel: {
+                        formatter: function (value, index) {
+                            return value.substring(0, 6);
+                        }
+                    }
+                },
+                legend: {
+                    top: 35,
+                    data: (arms.length == 1 && legendData[0] == '-') ? [] : legendData
+                },
+                color: colorarr,
+                series: [{
+                    name: legendData[0],
+                    type: 'bar',
+                    barMaxWidth: '15',
+                    data: seriesdata.reverse(),
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'right',
+                            formatter: function (params) {
+                                if (params.value > 0) {
+                                    return params.value;
+                                } else {
+                                    return '';
+                                }
+                            },
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: [0, 3, 3, 0]
+                        },
+                        emphasis: {
+                            barBorderRadius: [0, 3, 3, 0]
+                        }
+                    }
+                }]
+            };
+            // 给实例赋值
+            Instance.hideLoading();
+            Instance.setOption(option, true);
+        }
+        return {};
+    },
+
+    // 严重不良事件发生率[柱状图]，拆成多图显示
+    ChartSeriousAdversedEventsOccurancy: function (data) {
+        $("#SeriousAdversedEventsOccurancy").hide();
+        if (data == undefined || data.length == 0) return {};
+        // 根据分组名称来分组
+        var arms = $.Enumerable.From(data).GroupBy(function (o) { return o.Armname }).ToArray();
+        var axisMax = $.Enumerable.From(data).Max(function (o) { return (o.SeriousAdverseEventsOccurancy * 100).toFixed(1) });
+        for (var i = 0; i < arms.length; i++) {
+            // 新建实例
+            var chart = '<div id="SeriousAdversedEventsOccurancy_' + i + '" tag="chart" class="sy-prReport"></div>';
+            if (!$('div[id^=SeriousAdversedEventsOccurancy_]').length) {
+                $('#SeriousAdversedEventsOccurancy').after(chart);
+            } else {
+                $('div[id^=SeriousAdversedEventsOccurancy_]').last().after(chart);
+            }
+            var Instance = echarts.init(document.getElementById('SeriousAdversedEventsOccurancy_' + i), macaronsTheme);
+            Instance.showLoading({
+                text: '正在处理，请稍后...'
+            });
+            chartList.push({
+                Id: 'SeriousAdversedEventsOccurancy_' + i,
+                IsSet: false,
+                ChartInstance: Instance,
+                Data: null
+            });
+            // 准备数据
+            var armdata = $.Enumerable.From(arms[i].source).OrderByDescending(function (o) { return o.SeriousAdverseEventsOccurancy }).ToArray();
+            var legendData = $.Enumerable.From(armdata).Select(function (o) { return o.Armname }).Distinct().ToArray();
+            var yAxisdata = $.Enumerable.From(armdata).Select(function (o) { return o.SeriousAdverseEvents }).Distinct().ToArray();
+            var seriesdata = $.Enumerable.From(armdata).Select(function (o) { return (o.SeriousAdverseEventsOccurancy * 100).toFixed(1) }).ToArray();
+            // 配置选项
+            var option = {
+                title: {
+                    text: '各严重不良事件发生率',
+                    left: 'center',
+                    top: 10,
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function (params) {
+                        var str = params[0].name + '（发生率）';
+                        if (legendData.length == 1) {
+                            str += '：' + params[0].value + '%';
+                        } else {
+                            str += "<br />";
+                            for (var i = 0; i < params.length; i++) {
+                                str += params[i].seriesName;
+                                str += "：";
+                                str += params[i].value + '%';
+                                str += "<br />";
+                            }
+                        }
+                        return str;
+                    }
+                },
+                xAxis: {
+                    name: '严重不良事件发生率',
+                    type: 'value',
+                    max: 100,
+                    axisLabel: {
+                        formatter: function (value, index) {
+                            return value + "%";
+                        }
+                    },
+                    splitLine: {
+                        show: false
+                    },
+                    splitArea: false,
+                    axisLabel: {
+                        show: false,
+                    },
+                    axisTick: {
+                        show: false
+                    }
+                },
+                yAxis: {
+                    name: '严重不良事件名称',
+                    type: 'category',
+                    data: yAxisdata.reverse(),
+                    splitLine: {
+                        show: false
+                    },
+                    axisLabel: {
+                        formatter: function (value, index) {
+                            return value.substring(0, 6);
+                        }
+                    }
+                },
+                legend: {
+                    top: 35,
+                    data: (arms.length == 1 && legendData[0] == '-') ? [] : legendData
+                },
+                color: colorarr,
+                series: [{
+                    name: legendData[0],
+                    type: 'bar',
+                    barMaxWidth: '15',
+                    data: seriesdata.reverse(),
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'right',
+                            formatter: function (params) {
+                                if (params.value >= 0) {
+                                    return params.value + '%';
+                                } else {
+                                    return '';
+                                }
+                            },
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: [0, 3, 3, 0]
+                        },
+                        emphasis: {
+                            barBorderRadius: [0, 3, 3, 0]
+                        }
+                    }
+                }],
+                toolbox: {
+                    show: true,
+                    right: 40,
+                    top: 20,
+                    feature: {
+                        myTool: {
+                            show: true,
+                            title: '查看详情',
+                            icon: 'image:///Content/images/jiantou.png',
+                            onclick: function (opts) {
+                                dlg.setSize(1000, 700);
+                                dlg.setURL("各严重不良事件发生情况", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressSeriousAdverseEventsDetail," + encodeURIComponent(opts.option.legend[0].data.length ? opts.option.legend[0].data[0] : '-'));
+                                dlg.show();
+                            }
+                        },
+                        saveAsImage: this.InitSaveAsImage({ name: '严重不良事件发生率' })
+                    }
+                },
+            };
+            // 给实例赋值
+            Instance.hideLoading();
+            Instance.setOption(option, true);
+        }
+        return {};
+    },
+
+    // 各中心不良事件数[柱状图]
+    ChartSiteAdversedEvents: function (data) {
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#SiteAdversedEvents").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                seriesdata.push(data[i].AdverseEventsCount);
+            }
+        }
+        option = {
+            title: {
+                text: '各中心不良事件数',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var op = '中心编号：' + params[0].name.SiteCode.replace('中心', '') + '<br />' +
+                             '中心名称：' + params[0].name.SiteName + '<br />';
+                    for (var i = 0; i < params.length; i++) {
+                        op += params[i].seriesName + '：' + params[i].value;
+                    }
+                    return op;
+                }
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(1000, 700);
+                            dlg.setURL("各中心不良事件发生情况", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressAdverseEventsDetailBySite");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+            },
+            xAxis: {
+                type: 'category',
+                name: '中心编号',
+                data: xAxisdata,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (params) {
+                        return params == null ? params : params.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '不良事件数',
+                splitLine: {
+                    show: false,
+                }
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '不良事件数',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr,
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各中心不良事件发生率[柱状图]
+    ChartSiteAdversedEventsOccurancy: function (data) {
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#SiteAdversedEventsOccurancy").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                seriesdata.push((data[i].AdverseEventsOccurancy * 100).toFixed(1));
+            }
+        }
+        option = {
+            title: {
+                text: '各中心不良事件发生率',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var op = '中心编号：' + params[0].name.SiteCode.replace('中心', '') + '<br />' +
+                             '中心名称：' + params[0].name.SiteName + '<br />';
+                    for (var i = 0; i < params.length; i++) {
+                        op += params[i].seriesName + '：' + params[i].value + '%';
+                    }
+                    return op;
+                }
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(1000, 700);
+                            dlg.setURL("各中心不良事件发生情况", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressAdverseEventsDetailBySite");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+
+            },
+            xAxis: {
+                type: 'category',
+                name: '中心编号',
+                data: xAxisdata,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (params) {
+                        return params == null ? params : params.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '不良事件发生率',
+                max: 100,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    formatter: function (value, index) {
+                        return value + "%";
+                    }
+                },
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '不良事件发生率',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                            formatter: function (params) {
+                                if (params.value >= 0) {
+                                    return params.value + '%';
+                                } else {
+                                    return '';
+                                }
+                            },
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各中心严重不良事件发生数[柱状图]
+    ChartSiteSeriousAdversedEvents: function (data) {
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#SiteSeriousAdversedEvents").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                seriesdata.push(data[i].SeriousAdverseEventsCount);
+            }
+        }
+        option = {
+            title: {
+                text: '各中心严重不良事件数',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var op = '中心编号：' + params[0].name.SiteCode.replace('中心', '') + '<br />' +
+                             '中心名称：' + params[0].name.SiteName + '<br />';
+                    for (var i = 0; i < params.length; i++) {
+                        op += params[i].seriesName + '：' + params[i].value;
+                    }
+                    return op;
+                }
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(1000, 700);
+                            dlg.setURL("各中心严重不良事件发生情况", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressSeriousAdverseEventsDetailBySite");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+
+            },
+            xAxis: {
+                type: 'category',
+                name: '中心编号',
+                data: xAxisdata,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (params) {
+                        return params == null ? params : params.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '严重不良事件数',
+                splitLine: {
+                    show: false,
+                }
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '严重不良事件数',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各中心严重不良事件发生率[柱状图]
+    ChartSiteSeriousAdversedEventsOccurancy: function (data) {
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#SiteSeriousAdversedEventsOccurancy").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                seriesdata.push((data[i].SeriousAdverseEventsOccurancy * 100).toFixed(1));
+            }
+        }
+        option = {
+            title: {
+                text: '各中心严重不良事件发生率',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var op = '中心编号：' + params[0].name.SiteCode.replace('中心', '') + '<br />' +
+                             '中心名称：' + params[0].name.SiteName + '<br />';
+                    for (var i = 0; i < params.length; i++) {
+                        op += params[i].seriesName + '：' + params[i].value + '%' + '<br />';
+                    }
+                    return op;
+                }
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(1000, 700);
+                            dlg.setURL("各中心严重不良事件发生情况", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressSeriousAdverseEventsDetailBySite");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+
+            },
+            xAxis: {
+                type: 'category',
+                name: '中心编号',
+                data: xAxisdata,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (params) {
+                        return params == null ? params : params.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '严重不良事件发生率',
+                max: 100,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    formatter: function (value, index) {
+                        return value + "%";
+                    }
+                },
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '严重不良事件发生率',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                            formatter: function (params) {
+                                if (params.value >= 0) {
+                                    return params.value + '%';
+                                } else {
+                                    return '';
+                                }
+                            },
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各访视数据录入完成度[柱状图]
+    ChartInsertVisitComplete: function (data) {
+        var xAxisdata = [], seriesdata = [];
+
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#InsertVisitComplete").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                xAxisdata.push(data[i].Visit);
+                seriesdata.push((data[i].FinishStatus).toFixed(0));
+            }
+        }
+        option = {
+            title: {
+                text: '各访视单位病例录入字段数',
+                //subtext: isMuiltisite == 0 ? ('录入字段总数：' + totalField + ";单位病例录入字段数：" + totalFieldPercent) : '',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}<br />{a0}： {c0}'
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(850, 700);
+                            dlg.setURL("各访视单位病例录入字段数", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressFieldDetailByVisit");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+            },
+            xAxis: {
+                type: 'category',
+                name: '访视名称',
+                data: xAxisdata,
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (value, index) {
+                        if (value != undefined && value.length > 6 && xAxisdata.length > 10) {
+                            return value.substr(0, 5) + '..';
+                        } else {
+                            return value;
+                        }
+                    }
+                },
+                splitLine: {
+                    show: false,
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '单位病例录入字段数',
+                splitLine: {
+                    show: false,
+                }
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '单位病例录入字段数',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                            formatter: '{c0}',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各阶段录入完成度[柱状图]
+    ChartInsertSectionComplete: function (data) {
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#InsertSectionComplete").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                xAxisdata.push(data[i].Section);
+                seriesdata.push((data[i].FinishStatus).toFixed(0));
+            }
+        }
+        option = {
+            title: {
+                text: '各模块单位病例录入字段数',
+                //subtext: isMuiltisite == 0 ? ('录入字段总数：' + totalField + ";单位病例录入字段数：" + totalFieldPercent) : '',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}<br />{a0}： {c0}'
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(850, 700);
+                            dlg.setURL("各模块单位病例录入字段数", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressFieldDetailBySection");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+            },
+            xAxis: {
+                type: 'category',
+                name: '数据模块',
+                data: xAxisdata,
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (value, index) {
+                        if (value != undefined && value.length > 6 && xAxisdata.length > 10) {
+                            return value.substr(0, 5) + '..';
+                        } else {
+                            return value;
+                        }
+                    }
+                },
+                splitLine: {
+                    show: false,
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '单位病例录入字段数',
+                splitLine: {
+                    show: false,
+                }
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '单位病例录入字段数',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                            formatter: '{c0}',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各中心单位病例质疑数[柱状图]
+    ChartQueryRate: function (data) {
+        data = $.Enumerable.From(data).OrderByDescending(function (o) {
+            return o.QueryPercent;
+        }).ToArray();
+
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#QueryRate").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                seriesdata.push((data[i].QueryPercent).toFixed(0));
+            }
+        }
+        option = {
+            title: {
+                text: '各中心单位病例质疑数',
+                //subtext: isMuiltisite == 1 ? ('质疑总数: ' + totalQuery) : ("质疑总数：" + totalQuery + ";单位病例质疑数：" + queryPercent + ";待回复质疑数：" + totalPendingQuery),
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var op = '中心编号：' + params[0].name.SiteCode.replace('中心', '') + '<br />' +
+                             '中心名称：' + params[0].name.SiteName + '<br />';
+                    for (var i = 0; i < params.length; i++) {
+                        op += params[i].seriesName + '：' + params[i].value + '<br />'
+                    }
+                    return op;
+                }
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    //myTool: {
+                    //    show: true,
+                    //    title: '查看详情',
+                    //    icon: 'image:///Content/images/jiantou.png',
+                    //    onclick: function () {
+                    //        dlg.setSize(850, 700);
+                    //        dlg.setURL("质疑详情", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressPendingQueryDetail");
+                    //        dlg.show();
+                    //    }
+                    //},
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+
+            },
+            xAxis: {
+                type: 'category',
+                name: '中心编号',
+                data: xAxisdata,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (params) {
+                        return params == null ? params : params.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '单位病例质疑数(质疑数/例)',
+                splitLine: {
+                    show: false,
+                }
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '单位病例质疑数',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 待回复质疑数[柱状图]
+    ChartSitePendingQuery: function (data) {
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#SitePendingQuery").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                seriesdata.push(data[i].PendingQuery);
+            }
+        }
+        option = {
+            title: {
+                text: '各中心待回复质疑数',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var op = '中心编号：' + params[0].name.SiteCode.replace('中心', '') + '<br />' +
+                             '中心名称：' + params[0].name.SiteName + '<br />';
+                    for (var i = 0; i < params.length; i++) {
+                        op += params[i].seriesName + '：' + params[i].value + '<br />'
+                    }
+                    return op;
+                }
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    //myTool: {
+                    //    show: true,
+                    //    title: '查看详情',
+                    //    icon: 'image:///Content/images/jiantou.png',
+                    //    onclick: function () {
+                    //        dlg.setSize(850, 700);
+                    //        dlg.setURL("质疑详情", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressPendingQueryDetail");
+                    //        dlg.show();
+                    //    }
+                    //},
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+
+            },
+            xAxis: {
+                type: 'category',
+                name: '中心编号',
+                data: xAxisdata,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (params) {
+                        return params == null ? params : params.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '待回复质疑数',
+                splitLine: {
+                    show: false,
+                }
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '待回复质疑数',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各中心质疑数【柱状图】
+    ChartSiteQuery: function (data) {
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#SiteQuery").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                if (JSON.stringify(xAxisdata).indexOf(JSON.stringify({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode })) == -1) {
+                    xAxisdata.push({ "SiteName": data[i].SiteName, "SiteCode": data[i].SiteCode.replace('中心', '') });
+                }
+                seriesdata.push(data[i].Query);
+            }
+        }
+        option = {
+            title: {
+                text: '各中心质疑数',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    var op = '中心编号：' + params[0].name.SiteCode.replace('中心', '') + '<br />' +
+                             '中心名称：' + params[0].name.SiteName + '<br />';
+                    for (var i = 0; i < params.length; i++) {
+                        op += params[i].seriesName + '：' + params[i].value + '<br />'
+                    }
+                    return op;
+                }
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    //myTool: {
+                    //    show: true,
+                    //    title: '查看详情',
+                    //    icon: 'image:///Content/images/jiantou.png',
+                    //    onclick: function () {
+                    //        dlg.setSize(850, 700);
+                    //        dlg.setURL("质疑详情", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressPendingQueryDetail");
+                    //        dlg.show();
+                    //    }
+                    //},
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+
+            },
+            xAxis: {
+                type: 'category',
+                name: '中心编号',
+                data: xAxisdata,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    interval: 0,
+                    formatter: function (params) {
+                        return params == null ? params : params.SiteCode;
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '质疑数',
+                splitLine: {
+                    show: false,
+                }
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '质疑数',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 各模块质疑数[柱状图]
+    ChartDataQueryCount: function (data) {
+        var xAxisdata = [], seriesdata = [];
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#DataQueryCount").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                xAxisdata.push(data[i].Section);
+                seriesdata.push(data[i].QueryCount);
+            }
+        }
+        option = {
+            title: {
+                text: '各模块质疑数',
+                //subtext: isMuiltisite == 0 ? ("质疑总数：" + totalQuery + ";单位病例质疑数：" + queryPercent + ";待回复质疑数：" + totalPendingQuery) : '',
+                left: 'center',
+                top: 10,
+            },
+            tooltip: {
+                trigger: 'axis',
+            },
+            toolbox: {
+                show: true,
+                right: 40,
+                top: 20,
+                feature: {
+                    myTool: {
+                        show: true,
+                        title: '查看详情',
+                        icon: 'image:///Content/images/jiantou.png',
+                        onclick: function () {
+                            dlg.setSize(850, 700);
+                            dlg.setURL("质疑详情", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressQueryBySectionDetail");
+                            dlg.show();
+                        }
+                    },
+                    saveAsImage: this.InitSaveAsImage(null)
+                }
+
+            },
+            grid: {
+                top: 90
+            },
+            xAxis: {
+                type: 'category',
+                name: '数据模块',
+                data: xAxisdata,
+                splitLine: {
+                    show: false,
+                },
+                axisLabel: {
+                    interval: 0,
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '质疑数',
+                splitLine: {
+                    show: false,
+                }
+            },
+            dataZoom: {
+                show: xAxisdata.length > 0,
+                realtime: true,
+                startValue: 0,
+                endValue: 19,
+                showDetail: false,
+                height: 15,
+                bottom: '3%'
+            },
+            series: [
+                {
+                    name: '质疑数',
+                    type: 'bar',
+                    barMaxWidth: '40',
+                    data: seriesdata,
+                    label: {
+                        normal: {
+                            show: true,
+                            position: 'top',
+                        }
+                    },
+                    itemStyle: {
+                        normal: {
+                            barBorderRadius: barBorderRadius
+                        },
+                        emphasis: {
+                            barBorderRadius: barBorderRadius
+                        }
+                    }
+                }],
+            color: colorarr
+        };
+
+        if (xAxisdata.length <= 20) {
+            option.dataZoom.start = 0;
+            option.dataZoom.end = 100;
+        }
+
+        return option;
+    },
+
+    // 获取质疑lable数据
+    ChartQueryLabelData: function (data) {
+        if (data != undefined) {
+            if (data.length == 0) {
+                $("#QueryLabelData").hide();
+            }
+            for (var i = 0; i < data.length; i++) {
+                queryPercent = (data[i].QueryPercent).toFixed(2);
+                totalField = data[i].TotalField;
+                totalQuery = data[i].TotalQuery;
+                totalQueryField = data[i].TotalQueryField;
+                totalPendingQuery = data[i].TotalPendingQuery;
+                totalFieldPercent = (data[i].TotalFieldPercent).toFixed(0);
+                adverseEventCount = data[i].AdverseEventCount;
+                adverseEventOccurancy = (data[i].AdverseEventOccurancy * 100).toFixed(2) + '%';
+                seriousAdverseEventCount = data[i].SeriousAdverseEventCount;
+                seriousAdverseEventOccurancy = (data[i].SeriousAdverseEventOccurancy * 100).toFixed(2) + '%';
+            }
+        }
+
+        if (isMuiltisite == 1) {
+            $("#QueryLabel").html("质疑总数：" + totalQuery);
+        }
+        else {
+            $("#QueryLabel").html("质疑总数：" + totalQuery + ";单位病例质疑数：" + queryPercent + ";待回复质疑数：" + totalPendingQuery);
+            $("#InsertDataLabel").html("录入字段总数：" + totalField + ";录入完成度：" + totalFieldPercent);
+            $("#AdversedEventsLabel").html("不良事件发生总数：" + adverseEventCount + ";不良事件总发生率：" + adverseEventOccurancy);
+            $("#SeriousAdversedEventsLabel").html("严重不良事件发生总数：" + seriousAdverseEventCount + ";严重不良事件总发生率：" + seriousAdverseEventOccurancy);
+        }
+
+        option = {};
+
+        return option;
+    },
+
+    InitSaveAsImage: function (options) {
+        var saveAsImage = canExport ? {
+            show: true,
+            title: '保存为图片',
+            icon: 'image:///Content/images/biaoge.png',
+            type: 'jpeg',
+            name: '',
+            lang: ['点击本地保存']
+        } : null;
+        if (canExport) {
+            if (options != null) {
+                saveAsImage = $.extend({}, saveAsImage, options);
+            }
+        } else {
+            return null;
+        }
+        return saveAsImage;
+    }
+}
+
+/// 表格事件
+var GridDomain = {
+
+    // 生成表头
+    FormatHeader: function (tabledata) {
+        var cols;
+        var arr = [];
+        for (var k in tabledata[0]) {
+            arr.push(k);
+        }
+        var One = $.Enumerable.From(arr).Where(function (o) { return o.indexOf('_') > 0 }).ToArray();
+        if (One.length > 0) {
+            var LvOne = $.Enumerable.From(One).Distinct(function (o) { return o.split('_')[0] }).Select(function (o) { return o.split('_')[0] }).ToArray();
+            var temp = '', temp1 = '';
+            for (var i in tabledata[0]) {
+                if (i.split('_').length > 1 && $.inArray(i.split('_')[0], LvOne) >= 0) {
+                    if (temp.indexOf(i.split('_')[0]) < 0) {
+                        var j = $.Enumerable.From(arr).Count(function (o) { return o.indexOf(i.split('_')[0] + '_') >= 0 });
+                        if (temp != '') {
+                            temp += ',{ \"title\": "' + i.split('_')[0] + '", \"colspan\": ' + j + ' }';
+                        } else {
+                            temp += '{ \"title\": "' + i.split('_')[0] + '", \"colspan\": ' + j + ' }';
+                        }
+                    }
+                } else {
+                    if (temp != '') {
+                        temp += ',{ \"field\": "' + i + '", \"title\": "' + i + '", \"sortable\": false, \"width\": 50, \"align\": "left", \"halign\": "center", \"rowspan\": 2 }';
+                    } else {
+                        temp += '{ \"field\": "' + i + '", \"title\": "' + i + '", \"sortable\": false, \"width\": 50, \"align\": "left", \"halign\": "center", \"rowspan\": 2 }';
+                    }
+                }
+            }
+            for (var k = 0; k < One.length; k++) {
+                if (temp1 != '') {
+                    temp1 += ',{ \"field\": "' + One[k] + '", \"title\": "' + One[k].split('_')[1] + '", \"sortable\": false, \"width\": 50, \"align\": "left", \"halign\": "center", \"rowspan\": 1 }';
+                } else {
+                    temp1 += '{ \"field\": "' + One[k] + '", \"title\": "' + One[k].split('_')[1] + '", \"sortable\": false, \"width\": 50, \"align\": "left", \"halign\": "center", \"rowspan\": 1 }';
+                }
+            }
+            cols = JSON.parse('[[' + temp + '],[' + temp1 + ']]');
+        } else {
+            var temp = '';
+            for (var t in tabledata[0]) {
+                if (temp != '') {
+                    temp = temp + ',' + '{ \"field\": "' + t + '", \"title\": "' + t + '", \"sortable\": false, \"width\": 50, \"align\": "left", \"halign\": "center" }';
+                }
+                else {
+                    temp = '{ \"field\": "' + t + '", \"title\": "' + t + '", \"sortable\": false, \"width\": 50, \"align\": "left", \"halign\": "center" }';
+                }
+            }
+            temp = '[[' + temp + ']]';
+            cols = JSON.parse(temp);
+        }
+        return cols;
+    },
+
+    // 导出列表
+    ExportExcel: function (charttype) {
+        $.ajax({
+            type: "post",
+            url: "/Study/StudyManager/ExportTmpFile/" + studyid + "?type=" + charttype,
+            data: {},
+            beforeSend: function (e) {
+                layer.msg('正在生成文件，请稍候...', {
+                    icon: 16, time: 0
+                });
+            },
+            success: function (e) {
+                layer.closeAll();
+                if (e == "")
+                    return;
+                if (e.Ret == "0") {
+                    location.href = "/Study/StudyManager/ExportFile/" + studyid;
+                } else {
+                    $.messager.alert("错误", e.Msg, "error");
+                }
+            },
+            error: function (xhr, ajaxOptions, thrownError) {
+                layer.closeAll();
+                $.messager.alert("错误", $(xhr.responseText).text(), "error");
+            }
+        });
+    },
+
+    // 加载数据列表
+    LoadGrid: function () {
+        // 方案违背
+        if (!$('#StudyProgressViolationSummary').is(':hidden')) {
+            $.ajax({
+                type: "post",
+                url: "/Study/StudyManager/StudyProgressGridListJson/" + studyid + "?type=StudyProgressViolationSummary",
+                success: function (e) {
+                    if (e == "") return;
+                    var tabledata = JSON.parse(e.Content);
+                    $("#StudyProgressViolationSummary").datagrid({
+                        title: '',
+                        fit: false,
+                        fitColumns: true,
+                        striped: true,
+                        nowrap: true,
+                        pagination: false,
+                        pageNumber: 1,
+                        pageSize: 20,
+                        pageList: [10, 20, 30, 45, 60, 75],
+                        rownumbers: false,
+                        singleSelect: true,
+                        loadMsg: "请稍后...",
+                        sortOrder: "asc",
+                        columns: [[
+                               { field: "中心编号", title: '中心编号', width: 20 },
+                               { field: "中心名称", title: '中心名称', width: 20 },
+                               { field: "ICF签署日期晚于试验开始日期", title: 'ICF签署日期晚于试验开始日期', width: 20 },
+                               { field: "访视超窗", title: '访视超窗', width: 20 }
+                        ]],
+                        toolbar: [
+                            {
+                                text: 'ICF签署日期晚于试验开始日期详情',
+                                handler: function () {
+                                    dlg.setSize(1000, 700);
+                                    dlg.setURL("方案违背-ICF签署日期晚于试验开始日期", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressICFLateDetail");
+                                    dlg.show();
+                                }
+                            },
+                            {
+                                text: '访视超窗详情',
+                                handler: function () {
+                                    dlg.setSize(1000, 700);
+                                    dlg.setURL("访视超窗", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressVisitOverwindow");
+                                    dlg.show();
+                                }
+                            },
+                            canExport ? {
+                                text: '<i class="icofont-download-alt"></i>导出列表',
+                                handler: function () {
+                                    GridDomain.ExportExcel("StudyProgressViolationSummary");
+                                }
+                            } : {}//null
+                        ],
+
+                    }).datagrid("loadData", tabledata);
+                },
+                error: function (xhr, textStatus, errorThrown) {
+                }
+            });
+            // ICF签署日期晚于试验开始日期
+            function ICFSignDataEvt() {
+                dlg.setSize(850, 700);
+                dlg.setURL("方案违背-ICF签署日期晚于试验开始日期", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressICFLateDetail");
+                dlg.show();
+            }
+
+            // 访视超窗
+            function VisitWindowEvt() {
+                dlg.setSize(850, 700);
+                dlg.setURL("访视超窗", "/Study/StudyManager/StudyProgressDetail/" + studyid + "?type=StudyProgressVisitOverwindow");
+                dlg.show();
+            }
+        }
+        // 入组情况
+        if ($('#IntoGroupTable').length > 0) {
+            $.ajax({
+                type: "post",
+                url: "/Study/StudyManager/StudyProgressGridListJson/" + studyid + "?type=StudyProgressPatientBySite",
+                success: function (e) {
+                    if (e == "") return;
+                    var tabledata = JSON.parse(e.Content);
+                    $("#IntoGroupTable").datagrid({
+                        fit: false,
+                        fitColumns: true,
+                        striped: true,
+                        nowrap: true,
+                        pagination: false,
+                        pageNumber: 1,
+                        pageSize: 20,
+                        pageList: [10, 20, 30, 45, 60, 75],
+                        rownumbers: false,
+                        singleSelect: true,
+                        loadMsg: "请稍后...",
+                        sortOrder: "asc",
+                        scrollbarSize: 0,
+                        columns: GridDomain.FormatHeader(tabledata),
+                        toolbar:
+                            canExport ?
+                            '<div class="toolbar-right"> \
+                            <ul class="wysihtml5-toolbar"> \
+                                <li class="toolbar-right" style="margin:2px 3px 0 0;"> \
+                                    <a class="btn btn-small btn-primary" onclick="GridDomain.ExportExcel(\'StudyProgressPatientBySite\');"><i class="icofont-download-alt"></i>导出列表</a> \
+                                </li> \
+                            </ul> \
+                        </div>' : null,
+                        onLoadSuccess: function () {
+                            if (tabledata.length == 0) {
+                                $("#IntoGroupTable").parents('.datagrid').parent().addClass("hidden");
+                            }
+                        },
+                    }).datagrid("loadData", tabledata);
+                },
+                error: function (xhr, textStatus, errorThrown) {
+                }
+            });
+        }
+    }
+}
+
+/// 课题计划
+var ProgressDomain = {
+    LoadEvent: function (data) {
+        var ul = $('<ul class="imgList"></ul>');
+        for (var i = 0; i < data.length; i++) {
+            var li = $('<li></li>');
+            var a = $('<a></a>');
+            var text = $('<span class="text">' + data[i].EventName + '</span>');
+            var top = $('<span class="top">' + data[i].Scheduledate + '</span>');
+            var plus = canScheduleEdit ? $('<span class="plus">+</span>') : $('<span></span>');
+            var bottom = $('<span class="bottom"></span>');
+            // 课题进度编辑权限
+            if (canScheduleEdit) {
+                bottom.datepicker({
+                    clearBtn: true
+                }).on('changeDate', function (e) {
+                    var curtag = parseInt($(this).parent().attr('tag'));
+                    // 是否点击日期选择框清除按钮
+                    if (clickClear) {
+                        // 保存更改
+                        var f = ProgressDomain.SaveSchedule(curtag, '');
+                        if (f) {
+                            // 恢复标志位
+                            clickClear = false;
+                            // 更改文本值
+                            $(this).html('+');
+                            // 修改样式
+                            $(this).css('color', '#139bd0');
+                            $(this).css('font-size', '20px');
+                            $(this).css('font-weight', '900');
+                            // 更改进度
+                            ProgressDomain.ProgressStatus();
+                        }
+                    }
+                    else {
+                        // 保存更改
+                        var f = ProgressDomain.SaveSchedule(curtag, e.date.Format('yyyy-MM-dd'));
+                        if (f) {
+                            // 更改文本值
+                            $(this).text(e.date.Format('yyyy-MM-dd'));
+                            // 修改样式
+                            $(this).css('color', 'darkgray');
+                            $(this).css('font-size', '12px');
+                            $(this).css('font-weight', 'inherit');
+                            // 更改进度
+                            for (var i = 0; i <= curtag; i++) {
+                                $('#StudyProgress').find('li[tag="' + i + '"]').addClass('checked');
+                                $('#StudyProgress').find('li[tag="' + i + '"]').removeClass('unchecked');
+                            }
+                        }
+                    }
+                    // 关闭选择框
+                    $(this).datepicker('hide');
+                }).on('show', function () {
+                    // 注册clear事件，实属无奈，span标签无法清除
+                    $('.clear').click(function () {
+                        clickClear = true;
+                    });
+                    // 限定选择日期范围
+                    var curtag = parseInt($(this).parent().attr('tag'));
+                    var prevdate = '';
+                    var nextdate = '';
+                    for (var i = curtag; i - 1 >= 0; i--) {
+                        prevdate = $('#StudyProgress').find('li[tag="' + (i - 1) + '"] .bottom').text();
+                        if (prevdate != '+') {
+                            break;
+                        }
+                    }
+                    for (var i = curtag; i < $('#StudyProgress li').length; i++) {
+                        nextdate = $('#StudyProgress').find('li[tag="' + (i + 1) + '"] .bottom').text();
+                        if (nextdate != '+') {
+                            break;
+                        }
+                    }
+
+                    if (IsDate(prevdate)) {
+                        $(this).datepicker('setStartDate', new Date(prevdate));
+                    }
+                    if (IsDate(nextdate)) {
+                        $(this).datepicker('setEndDate', new Date(nextdate));
+                    }
+                });
+            }
+            // 填充课题进度数据
+            if (data[i].Completedate != '') {
+                bottom.html(data[i].Completedate);
+            }
+            else if (data[i].Completedate == '') {
+                bottom.html(plus);
+            }
+            li.attr('tag', i);
+
+            li.append(text);
+            li.append(a);
+            li.append(top);
+            li.append(bottom);
+
+            if (i == 0) {
+                var shd = $('<span class="shd">计划</span>');
+                var act = $('<span class="act">实际</span>');
+                li.append(shd);
+                li.append(act);
+            }
+
+            ul.append(li);
+        }
+        $('#StudyProgress').html(ul);
+
+        GlobalDomain.Progressbar();
+        GlobalDomain.ProgressResize();
+        ProgressDomain.ProgressStatus();
+    },
+
+    // 更改进度
+    ProgressStatus: function () {
+        var step = -1, stepText = '';
+        for (var i = $('#StudyProgress li').length - 1; i >= 0; i--) {
+            stepText = $('#StudyProgress').find('li[tag="' + i + '"] .bottom').text();
+            if (stepText != '+') {
+                step = i;
+                break;
+            }
+        }
+        for (var i = $('#StudyProgress li').length - 1; i >= 0; i--) {
+            if (i > step) {
+                $('#StudyProgress').find('li[tag="' + i + '"]').addClass('unchecked');
+                $('#StudyProgress').find('li[tag="' + i + '"]').removeClass('checked');
+            }
+            else {
+                $('#StudyProgress').find('li[tag="' + i + '"]').addClass('checked');
+                $('#StudyProgress').find('li[tag="' + i + '"]').removeClass('unchecked');
+            }
+        }
+    },
+
+    SaveSchedule: function (step, date) {
+        var result = false;
+        $.ajax({
+            type: "POST",
+            async: false,
+            url: "/Study/StudyManager/SaveSchedule/" + studyid,
+            data: {
+                json: JSON.stringify({
+                    ScheduleName: $('.imgList li[tag="' + step + '"] .text').text(),
+                    CompleteDate: date
+                })
+            },
+            beforeSend: function (e) {
+                layer.msg("请稍后...", { icon: 16 });
+            },
+            success: function (e) {
+                if (e.Ret == "0") {
+                    result = true;
+                }
+                else {
+                    $.messager.alert("错误", e.Msg);
+                }
+            },
+            error: function (xhr, ajaxOptions, thrownError) {
+                $.messager.alert("错误", $(xhr.responseText).text(), "error");
+            },
+            complete: function () {
+                layer.closeAll();
+            }
+        });
+        return result;
+    }
+}
+
+/// 保存全部图片
+var ExportDomain = {
+    ExportImage: function () {
+        var imgUrl = [], title, imgurl;
+        for (var i = 0; i < chartList.length; i++) {
+            if ($('#' + chartList[i].Id).length > 0 && $('#' + chartList[i].Id).css('display') != 'none') {
+                title = chartList[i].ChartInstance.getOption().title == undefined ? '' : chartList[i].ChartInstance.getOption().title[0].text;
+                if (chartList[i].ChartInstance.getOption().legend.length > 0 &&
+                    chartList[i].ChartInstance.getOption().legend[0].data.length == 1) {
+                    title += '-' + chartList[i].ChartInstance.getOption().legend[0].data[0];
+                }
+                imgurl = chartList[i].ChartInstance.getDataURL({ type: 'png', pixelRatio: 1, backgroundColor: '#FFF' });
+                imgUrl.push(encodeURI(title + ',' + imgurl));
+            }
+        }
+
+        if (imgUrl.length == 0) {
+            $.messager.alert('提示', '没有可以导出的图片'); return;
+        }
+
+        $.ajax({
+            type: "post",
+            url: "/Study/StudyManager/ExportTmpImages/" + studyid,
+            data: { imgUrl: imgUrl },
+            beforeSend: function (e) {
+                layer.msg('正在生成文件，请稍候...', {
+                    icon: 16, time: 0
+                });
+            },
+            success: function (e) {
+                layer.closeAll();
+                if (e == "")
+                    return;
+                if (e.Ret == "0") {
+                    location.href = "/Study/StudyManager/ExportImages/" + studyid;
+                } else {
+                    $.messager.alert("错误", e.Msg, "error");
+                }
+            },
+            error: function (xhr, ajaxOptions, thrownError) {
+                layer.closeAll();
+                $.messager.alert("错误", $(xhr.responseText).text(), "error");
+            }
+        });
+    }
+}
+
+// 判断是否合法日期
+function IsDate(dateStr) {
+    // 如果是正确的日期格式返回true,否则返回false
+    var regExp = /\b\d{4}-\d{1,2}-\d{1,2}\b/;
+    // 判断整体格式yyyy-mm-dd
+    if (dateStr != dateStr.match(/\d{4}-\d{2}-\d{2}/ig)) {
+        //$.messager.alert('提示','日期格式：yyyy-mm-dd');
+        return false;
+    }
+
+    var tmpArr;
+    tmpArr = dateStr.split('-');
+
+    var rYear, rMonth, rDay
+    rYear = parseInt(tmpArr[0]);
+    rMonth = parseInt(tmpArr[1]);
+    rDay = parseInt(tmpArr[2]);
+    // 判断月
+    if ((rMonth > 12) || (rMonth < 1)) {
+        //$.messager.alert('提示', '月份输入错误!');
+        return false;
+    }
+
+    var rYearflag;
+
+    // 判断润年
+    if (((rYear % 100) == 0) && ((rYear % 4) == 0)) {
+        rYearflag = true;
+    } else if ((rYear % 4) == 0) {
+        rYearflag = true;
+    } else {
+        rYearflag = false;
+    }
+
+    if (((",1,3,5,7,8,10,12,").indexOf("," + rMonth + ",") != -1) && (rDay < 32)) {
+        return (true);
+    } else if (((",4,6,9,11,").indexOf("," + rMonth + ",") != -1) && (rDay < 31)) {
+        return (true);
+    } else if (rDay < 29) {
+        return (true);
+    } else if (rYearflag && (rDay < 30)) {
+        return (true);
+    } else {
+        //$.messager.alert('提示', '天输入错误!');
+        return false;
+    }
+}
+
+// 日期格式化
+Date.prototype.Format = function (fmt) {
+    var o = {
+        "M+": this.getMonth() + 1,
+        "d+": this.getDate(),
+        "h+": this.getHours(),
+        "m+": this.getMinutes(),
+        "s+": this.getSeconds(),
+        "q+": Math.floor((this.getMonth() + 3) / 3),
+        "S": this.getMilliseconds()
+    };
+    if (/(y+)/.test(fmt)) fmt = fmt.replace(RegExp.$1, (this.getFullYear() + "").substr(4 - RegExp.$1.length));
+    for (var k in o)
+        if (new RegExp("(" + k + ")").test(fmt)) fmt = fmt.replace(RegExp.$1, (RegExp.$1.length == 1) ? (o[k]) : (("00" + o[k]).substr(("" + o[k]).length)));
+    return fmt;
+}
+

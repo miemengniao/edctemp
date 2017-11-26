@@ -1,0 +1,262 @@
+var opts = {
+    defaultShowIndex: 1
+};
+
+// 左侧menu类
+var menuUI = (function () {
+    // 默认参数
+    var _defaulstOpts = {
+        // 默认打开的菜单下标
+        defaultShowIndex: 0
+    };
+       
+    // jobsdeskmenusdata是菜单数据
+    // opts是用户参数，用以覆盖原有的默认参数
+    var menuUI = function (jobsdeskmenusdata, opts) {
+        this.jobsdeskmenusdata = jobsdeskmenusdata;
+        this.opts = $.extend({}, _defaulstOpts, opts);
+        // jquery对象
+        this.$node = null;
+
+        // 生成dom，绑定事件
+        this.create();
+        // 显示默认展开页
+        this.showSubMenuByIndex(this.opts.defaultShowIndex);
+        this.toggleType = 'open';
+    };
+
+    // 废弃
+    var _createTitle = function (title) {
+        var arr = [
+			'<div class="bigTitle">',
+				'<span class="glyphicon glyphicon-home" aria-hidden="true"></span>',
+				title,
+			'</div>'
+        ];
+        return $(arr.join(''));
+    };
+
+    // 创建子菜单
+    var _createSubMenu = function (subMenu) {
+        var arr = [
+			'<div class="subMenu">',
+				'<div class="title">',
+                    subMenu.icon ? '<span class="leftIcon icon iconfont '+subMenu.icon+ '"></span> ':'',
+					'<span class="text">',
+                       subMenu.items.length == 0 ? '<a href="'+ subMenu.link +'">'+subMenu.title+'</a>':subMenu.title ,
+                        //'<a href="'+ subMenu.items ? subMenu.link : '#'  +'">',
+						//    subMenu.title, 
+                        //'</a>',
+					'</span>',
+					'<span class="rightIcon glyphicon" aria-hidden="true"></span>',
+				'</div>',
+				subMenu.items.map(function (n) {
+				    return [
+						'<div class="item">',
+							'<div class="text">',
+								'<a href="' + n.link + '">',
+                                    n.text,
+                                '</a>',
+							'</div>',
+						'</div>'
+				    ].join('');
+				}).join(''),
+			'</div>'
+        ];
+        return $(arr.join(''));
+    };
+
+    // 创建开关
+    var _createToggleBar = function () {
+        var arr = [
+			'<div class="toggleBar">',
+					'<span class="icon iconfont icon-arrows-left" aria-hidden="true"></span>',
+			'</div>'
+        ];
+        return $(arr.join('')).addClass('faceLeft');
+    };
+
+
+    menuUI.prototype.create = function () {
+        var self = this;
+        var jobsdeskmenusdata = this.jobsdeskmenusdata;
+        var $menu = $('<div/>').addClass('new-menu').append(_createToggleBar());
+        //.append(_createTitle(jobsdeskmenusdata.title))
+        $.each(jobsdeskmenusdata.subMenus, function (i, n) {
+            $menu.append(_createSubMenu(n));
+        });
+
+        // 开始事件绑定
+        $menu.delegate('.subMenu .title', 'click', function (e) {
+            $(this).siblings('.item').toggle();
+
+            var subMenu = $(this).parents('.subMenu');
+            subMenu.find('.item').size() && subMenu.find('.title span:last').toggleClass('icofont-chevron-down');
+            var otherSubMenu = subMenu.siblings('.subMenu');
+            otherSubMenu.find('.title span:last').removeClass('icofont-chevron-down');
+            otherSubMenu.find('.item').toggle(false);
+
+            // hot
+            if (!subMenu.find('.item').size()) {
+                $menu.find('.hot').removeClass('hot');
+                $(this).find('.text,.leftIcon').addClass('hot');
+                //otherSubMenu.find('.title .text,.title .leftIcon').removeClass('hot');
+            }
+        });
+
+        $menu.delegate('.toggleBar', 'click', function () {
+            var bar = $(this);
+            var toggleType;
+            if (bar.hasClass('faceLeft')) {
+                bar.removeClass('faceLeft').addClass('faceRight');
+                bar.find('span').removeClass('icon-arrows-left').addClass('icon-arrows-right');
+                $menu.css('left', -$menu.width());
+                toggleType = 'close';
+            } else {
+                bar.removeClass('faceRight').addClass('faceLeft');
+                bar.find('span').removeClass('icon-arrows-right').addClass('icon-arrows-left');
+                $menu.css('left', 0);
+                toggleType = 'open';
+            }
+            // 切换
+            self.opts.toggleHook(toggleType, self.$node.width());
+            self.toggleType = toggleType;
+            $(window).resize();
+        });
+
+        $menu.delegate('.item .text a', 'click', function () {
+            $menu.find('.hot').removeClass('hot');
+            //$menu.find('.item .text').removeClass('hot').parents('.subMenu').find('.title .text').removeClass('hot');
+            $(this).addClass('hot').parents('.subMenu').find('.title .text').addClass('hot');
+        });
+
+        this.$node = $menu;
+        return this;
+    };
+
+    menuUI.prototype.showSubMenuByIndex = function (index) {
+        this.$node.find('.subMenu').eq(index).find('.title').trigger('click');
+    };
+
+    //menuUI.prototype.setHot = function (subMenu, itemName) {
+    //    var $titleList = this.$node.find('.subMenu .title');
+    //    $titleList.each(function (i, n) {
+    //        if ($(this).find('.text a').text() == subMenu) {
+    //            $(this).find('.text').addClass('hot');
+    //            var $itemList = $(this).parent().find('.item');
+    //            $itemList.each(function (ii, nn) {
+    //                if ($(this).find('.text a').text() == itemName) {
+    //                    $(this).find('.text a').addClass('hot');
+    //                }
+    //            });
+    //        }
+    //        else if ($(this).find('span.text').text() == subMenu) {
+    //            $(this).find('.text').addClass('hot');
+    //            var $itemList = $(this).parent().find('.item');
+    //            $itemList.each(function (ii, nn) {
+    //                if ($(this).find('.text a').text() == itemName) {
+    //                    $(this).find('.text a').addClass('hot');
+    //                }
+    //            });
+    //        }
+    //    })
+    //};
+
+    return menuUI;
+})();
+
+var myMenuUI;
+$(function () {
+    //debugger;
+    myMenuUI = new menuUI(jobsdeskmenusdata, {
+        // toggleBar的钩子
+        toggleHook: function (toggleType, width) {
+            var marginLeft, ccWidth, contentWidth;
+            ccWidth = $("#jobsdeskleftmenu").width();
+            if (toggleType == 'close') {
+                marginLeft = 20;
+            } else {
+                marginLeft = ccWidth;
+            }
+            contentWidth = 'calc(100% - ' + (marginLeft+24) + 'px)';
+            //contentWidth = $(document).width() - 40;
+            $('#jobsdeskcontent').css('margin-left', marginLeft).css('width', contentWidth);
+            $(window).resize();
+            //var marginLeft, ccWidth, contentWidth;
+            //ccWidth = $('#cc').width();
+            //if (toggleType == 'close') {
+            //    marginLeft = -width;
+            //    ccWidth += width;
+            //    contentWidth = '96%';
+            //}
+            //else {
+            //    marginLeft = 0;
+            //    ccWidth -= width;
+            //    contentWidth = 'calc(100% - 250px)';
+            //}
+            //$('#jobsdeskcontent').css('margin-left', marginLeft).css('width', contentWidth);
+            //$('#cc').layout('resize', { width: ccWidth });
+        }
+    });
+
+    // 为了获得屏幕高度
+    $('#jobsdeskleftmenu').height($('html').height() - 44);
+    
+    $('#jobsdeskleftmenu').append(myMenuUI.$node);
+    $(window).resize(function () {
+        $('#jobsdeskleftmenu').height($('html').height() - 44);
+        setTimeout(function () {
+            var marginLeft, ccWidth, contentWidth;
+            ccWidth = $("#jobsdeskleftmenu").width();
+            if (myMenuUI.toggleType == 'close') {
+                marginLeft = 20;
+            } else {
+                marginLeft = ccWidth;
+            }
+            contentWidth = 'calc(100% - ' +(marginLeft+24) + 'px)';
+            $('#jobsdeskcontent').css('margin-left', marginLeft).css('width', contentWidth);
+        }, 500);
+    });
+
+    // 通讯录调用
+    $(".toolset li:last").mouseover(function () {
+        $(".mailList").show();
+    }).mouseout(function () {
+        $(".mailList").hide();
+    })
+
+    setHotMenu();
+});
+
+
+function setHotMenu() {
+    var urlstr = location.href;
+    var urlstatus = false;
+    // 遍历导航div
+    $(".new-menu a").each(function () {
+        var arr = $(this).attr('href').split('/');
+        var link = arr[arr.length - 3] + '/' + arr[arr.length - 2]+ '/';
+        // 判断导航里面的rel和url地址是否相等
+        if ((urlstr).indexOf(link) >= 0) {
+            $(this).parents('.item').siblings('.title').click();
+            $(this).parents('.item').siblings('.title').children('.text').addClass('hot');
+            $(this).parents('.item').siblings('.title').children('.text').addClass('hottitle');
+            $(this).addClass('hot');
+            urlstatus = true;
+        } else {
+            $(this).removeClass('hot');
+            $(this).parents('.item').siblings('.title').children('.text').not('.hottitle').removeClass('hot');
+        }
+    });
+    // 当前样式保持
+    if (!urlstatus) {
+        $(".new-menu a").eq(0).addClass('hot');
+    }
+    if (urlstr.indexOf('StudyManager/StudyProgressIndex') < 0) {
+        $('.subMenu').eq(0).find('.hot').removeClass('hot');
+    }
+}
+
+
+
+

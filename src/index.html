@@ -1,14 +1,403 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>EdcCharts</title>
-  <base href="/">
+<!DOCTYPE html>
+<!-- saved from url=(0068)https://www.crabedc.com/Study/StudyManager/StudyProgressIndex/100020 -->
+<html><script id="tinyhippos-injected">if (window.top.ripple) { window.top.ripple("bootstrap").inject(window, document); }</script><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <base href="/">
+    <title>工作台 - Crabyter肿瘤科研数据管理系统</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="./assets/old/bootstrap.css" rel="stylesheet">
+    <link href="./assets/old/bootstrap(1).css" rel="stylesheet">
+    <link href="./assets/old/bootstrap-responsive.css" rel="stylesheet">
+    <link href="./assets/old/stilearn.css" rel="stylesheet">
+    <link href="./assets/old/stilearn-responsive.css" rel="stylesheet">
+    <link href="./assets/old/stilearn-helper.css" rel="stylesheet">
+    <link href="./assets/old/stilearn-icon.css" rel="stylesheet">
+    <link href="./assets/old/colorpicker.css" rel="stylesheet">
+    <link href="./assets/old/font-awesome.css" rel="stylesheet">
+    <link href="./assets/old/animate.css" rel="stylesheet">
+    <link href="./assets/old/uniform.default.css" rel="stylesheet">
+    <link href="./assets/old/stilearn-rewrite.css" rel="stylesheet">
+    <link href="./assets/old/datepicker.css" rel="stylesheet">
 
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-</head>
+
+    <link href="./assets/old/bootstrap-wysihtml5.css" rel="stylesheet">
+    <link href="./assets/old/jquery.fileupload.css" rel="stylesheet">
+
+    <!-- easyui -->
+    <link rel="stylesheet" type="text/css" href="./assets/old/easyui.css">
+    <link rel="stylesheet" type="text/css" href="./assets/old/icon.css">
+    <!-- crabyter -->
+    <link rel="stylesheet" type="text/css" href="./assets/old/style.css">
+    <link rel="stylesheet" type="text/css" href="./assets/old/Site.css">
+
+    <link href="./assets/old/jquery-ui-custom-1.11.2.css" rel="stylesheet">
+    <link href="./assets/old/jquery-ui-wy.css" rel="stylesheet">
+    <link href="./assets/old/layer.css" rel="stylesheet">
+
+    <link href="./assets/old/iconfont.css" rel="stylesheet">
+
+
+    <link href="./assets/old/bootstrap-theme.css" rel="stylesheet">
+    <link href="./assets/old/jobsdesk.css" rel="stylesheet">
+    <link href="./assets/old/iconfont2.css" rel="stylesheet">
+
+    <!-- 这句放到前面去了
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    -->
+
+    <link href="./assets/old/style(1).css" rel="stylesheet">
+    <link href="./assets/old/progReport.css" rel="stylesheet">
+    <link href="./assets/old/iconfont2.css" rel="stylesheet">
+    <style>
+        .imgList {
+            margin: 25px;
+            padding: 0;
+            height: 26px; /*64px;*/
+            min-width: 900px;
+        }
+
+            .imgList > li {
+                line-height: 26px; /*64px;*/
+                min-width: 95px;
+                text-align: center;
+                position: relative;
+                float: left;
+                display: inline-block;
+            }
+
+            .imgList a {
+                position: absolute;
+                top: 0;
+                right: -8px; /*-16px;*/
+                z-index: 1;
+                width: 16px; /*32px;*/
+                height: 26px; /*64px;*/
+                background: url(../../../../Content/images/arrow-right1.png) no-repeat center center;
+            }
+
+            .imgList span.text {
+                padding-left: 15px;
+                padding-right: 5px;
+            }
+
+            .imgList span.top {
+                font-size: 12px;
+                line-height: 24px;
+                width: 75px;
+                text-align: center;
+                position: absolute;
+                bottom: 110%;
+                right: -32px;
+                color: darkgray;
+                cursor: pointer;
+            }
+
+            .imgList span.bottom {
+                font-size: 12px;
+                line-height: 24px;
+                width: 75px;
+                text-align: center;
+                position: absolute;
+                top: 110%;
+                right: -32px;
+                color: darkgray;
+                cursor: pointer;
+            }
+
+            .imgList span.shd {
+                font-size: 12px;
+                line-height: 24px;
+                width: 75px;
+                text-align: center;
+                position: absolute;
+                bottom: 110%;
+                left: -28px; /*-45px;*/
+                color: #000000;
+            }
+
+            .imgList span.act {
+                font-size: 12px;
+                line-height: 24px;
+                width: 75px;
+                text-align: center;
+                position: absolute;
+                top: 110%;
+                left: -28px; /*-45px;*/
+                color: #000000;
+            }
+
+            .imgList li.checked {
+                background-color: #21B1E2; /*#00ffff;*/
+                color: #FFFFFF;
+            }
+
+            .imgList li.unchecked {
+                background-color: #dddddd; /*#808080;*/
+            }
+
+        .plus {
+            font-weight: 900;
+            font-size: 20px;
+            color: #139bd0;
+        }
+        /*任务列表chenli append*/
+        .task-list li{ height:30px; line-height:30px; overflow:hidden;}
+        /*.task-list li:nth-child(2n){ background-color:#fbfbfb;}*/
+        .task-list{ background:url(/content/images/task_bg.gif) repeat;}
+        .task-list li a.checks{ float:right; margin-top:6px; margin-right:10px; width:48px; height:18px; line-height:16px; text-align:center; background-color:#21b1e3; border-radius:3px; color:#fff;}
+        .task-list li a.text{  cursor:default;width:80%;margin-left:20px;display:block;height:30px; overflow:hidden;text-overflow:ellipsis;-o-text-overflow:ellipsis;white-space:nowrap;}
+        .task-list li a.text span{ color:#ff0000;padding:0 2px;}
+    </style>
+    <style>
+        .datagrid-toolbar {
+            height: auto;
+            padding: 1px 2px;
+            border-width: 0 0 1px 0;
+            border-style: solid;
+            height: 30px;
+        }
+
+            .datagrid-toolbar table {
+                float: right;
+            }
+
+                .datagrid-toolbar table .l-btn-left {
+                    color: #FFFFFF;
+                    background-color: #035ea0;
+                    text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+                    border-radius: 4px;
+                    background-color: #035ea0;
+                    background-image: -moz-linear-gradient(top, #217DC0, #035ea0);
+                    /* background-image:
+            -webkit-gradient(linear, 0 0, 0 100%, from(#217DC0), to(#035ea0)); */
+                    /* background-image:
+            -webkit-linear-gradient(top, #217DC0, #035ea0); */
+                    background-image: -o-linear-gradient(top, #217DC0, #035ea0);
+                    background-image: linear-gradient(to bottom, #217DC0, #035ea0);
+                    background-repeat: repeat-x;
+                    border-color: #217DC0 #035ea0 #035ea0;
+                    border-color: rgba(0, 0, 0, 0.1) rgba(0, 0, 0, 0.1) rgba(0, 0, 0, 0.25);
+                }
+    </style>
+<link rel="stylesheet" href="./assets/old/layer.css" id="layui_layer_skinlayercss" style=""></head>
+
 <body>
-  <app-root></app-root>
-</body>
-</html>
+
+    <!-- section header -->
+
+    <div class="new-header">
+    <input type="hidden" id="uid" name="uid" value="2AOfj7L7L7CI2YraGE%2blnjOZLjTAvsWJmTASpyLHC20cGZ%2b7ASUN6hsxNtqKFDFlocV5FaedKeiaTas%2fmcep6DdVOuP1gNXkaZzXznnyLeK7I5MiwUkhMPFbe4HC5d3EtjWD%2fMe1%2bGbI8iRcR8ux1tDbbuxiAQ4M1rrai8xXYhzN5n3VhhiCu6exADRHDPcV">
+    <div class="back" onclick="BackIndex()">
+        <div class="leftIcon icon iconfont icon-fanhui">
+
+        </div>
+        <div class="text">
+            返回
+        </div>
+    </div>
+    <div class="title" title="DIA演示课题">DIA演示课题</div>
+    <div class="toolset">
+        <ul>
+                <li>
+                    <div class="glyphicon glyphicon-stats">
+                        <span onclick="goToReport(this)" href="https://www.crabedc.com/report/home/enter/100020?a=report&amp;uid=2AOfj7L7L7CI2YraGE%2blnjOZLjTAvsWJmTASpyLHC20cGZ%2b7ASUN6hsxNtqKFDFlocV5FaedKeiaTas%2fmcep6DdVOuP1gNXkaZzXznnyLeK7I5MiwUkhMPFbe4HC5d3EtjWD%2fMe1%2bGbI8iRcR8ux1rwsx%2bzm2GvRjYlhnA079OXCPVH7M43neCzLA6%2btJV2A" target="stat_window" title="查询统计">
+                            <b style="font-family:Microsoft Yahei;font-weight:normal;">查询统计</b>
+                        </span>
+                    </div>
+                </li>
+                            <li>
+                    <div class="glyphicon glyphicon-user">
+                        <b style="font-family:Microsoft Yahei;font-weight:normal;">通讯录</b>
+                    </div>
+                    <div class="mailList" style="display:none">
+                            <p><a href="https://www.crabedc.com/Study/Patient/ContacterIndex/100020">课题成员</a></p>
+                                                    <p><a href="https://www.crabedc.com/Study/Patient/AddressBook/100020">相关联系方</a></p>
+                    </div>
+                </li>
+        </ul>
+    </div>
+</div>
+    <!-- section content -->
+    <section style="min-width:1000px;">
+        <div id="jobsdeskleftmenu" style="width: 226px; float: left; height: 856px;">
+
+
+        <div class="new-menu"><div class="toggleBar faceLeft"><span class="icon iconfont icon-arrows-left" aria-hidden="true"></span></div><div class="subMenu"><div class="title"><span class="leftIcon icon iconfont icon-shouye hot"></span> <span class="text hot"><a href="https://www.crabedc.com/Study/StudyManager/StudyProgressIndex/100020" class="hot">工作台</a></span><span class="rightIcon glyphicon" aria-hidden="true"></span></div></div><div class="subMenu"><div class="title"><span class="text">病例管理</span><span class="rightIcon glyphicon" aria-hidden="true"></span></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/Patient/PatientList/100020">病例列表</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/Datasource/OCRList/100020">化验单OCR</a></div></div></div><div class="subMenu"><div class="title"><span class="text">数据管理</span><span class="rightIcon glyphicon" aria-hidden="true"></span></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/Patient/RuleQueryList/100020">质疑管理</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/QualityMonitor/SignIndexPI/100020">签名管理</a></div></div></div><div class="subMenu"><div class="title"><span class="text">课题管理</span><span class="rightIcon glyphicon" aria-hidden="true"></span></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Vdisk/Document/StudyFolderList/100020">文档管理</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Vdisk/Training/Index/100020">培训管理</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/StudyReport/StudyReportIndex/100020">课题报表</a></div></div></div><div class="subMenu"><div class="title"><span class="text">课题设置</span><span class="rightIcon glyphicon" aria-hidden="true"></span></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/Patient/StudyEdit/100020">基本设置</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/Site/List/100020">中心管理</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/Setting/RoleList/100020">角色管理</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/StudyUser/StudySiteuser/100020">成员管理</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/Patient/StudyCRF/100020">CRF查看</a></div></div></div><div class="subMenu"><div class="title"><span class="text">知识库</span><span class="rightIcon glyphicon" aria-hidden="true"></span></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Master/Regular/CenterLib/100020">正常值范围</a></div></div></div><div class="subMenu"><div class="title"><span class="text">随访管理</span><span class="rightIcon glyphicon" aria-hidden="true"></span></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/EasyFollowup/Setup/100020">随访设置</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/EasyFollowup/PatientManager/100020">患者管理</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/EasyFollowup/CalendarManager/100020">随访日历</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/EasyFollowup/CallinManager/100020">电话随访</a></div></div><div class="item" style="display: none;"><div class="text"><a href="https://www.crabedc.com/Study/EasyFollowup/QAManager/100020">患者答疑</a></div></div></div></div></div>
+        <!-- content -->
+        <div id="jobsdeskcontent" class="content" style="float:left;width:calc(100% - 250px);padding-top: 10px;">
+
+
+<div class="content-body" data-autosize="true" style="height: 816px;">
+            <div class="sy-prItem sy-prItem-task">
+                <div class="sy-prTitle" style="z-index:9;">任务列表</div>
+                <ul class="task-list sy-prContent">
+
+                        <li id="TaskPendingQueryOpen" class="">
+                            <a href="https://www.crabedc.com/Study/Patient/RuleQueryList/100020" class="checks">查看</a>
+                            <a class="text">当前有已开放质疑数<span class="PendingQueryOpen">35</span>条，当前有已重启质疑数<span class="PendingQueryReopened">0</span>条</a>
+                        </li>
+
+                </ul>
+            </div>
+            <div id="main" class="sy-prItem">
+                <div class="sy-prTitle">课题计划</div>
+                <div id="StudyProgress" class="sy-prContent sy-p20 sy-tAL" style="overflow-x:auto;width:auto;"><ul class="imgList"><li tag="0" class="checked" style="width: 155.1px;"><span class="text">方案定稿</span><a></a><span class="top">2017-08-01</span><span class="bottom">2017-08-24</span><span class="shd">计划</span><span class="act">实际</span></li><li tag="1" class="checked" style="width: 155.1px;"><span class="text">伦理批准</span><a></a><span class="top">2017-11-01</span><span class="bottom">2017-08-31</span></li><li tag="2" class="checked" style="width: 155.1px;"><span class="text">首例患者入组</span><a></a><span class="top">2017-12-01</span><span class="bottom">2017-09-06</span></li><li tag="3" class="unchecked" style="width: 155.1px;"><span class="text">入组完成</span><a></a><span class="top">2017-12-01</span><span class="bottom"><span class="plus">+</span></span></li><li tag="4" class="unchecked" style="width: 155.1px;"><span class="text">末例患者出组</span><a></a><span class="top">2017-12-01</span><span class="bottom"><span class="plus">+</span></span></li><li tag="5" class="unchecked" style="width: 155.1px;"><span class="text">数据锁定</span><a></a><span class="top">2018-03-01</span><span class="bottom"><span class="plus">+</span></span></li><li tag="6" class="unchecked" style="width: 155.1px;"><span class="text">统计分析报告</span><a></a><span class="top">2018-05-01</span><span class="bottom"><span class="plus">+</span></span></li><li tag="7" class="unchecked" style="width: 155.1px;"><span class="text">总结报告</span><a></a><span class="top">2018-07-01</span><span class="bottom"><span class="plus">+</span></span></li><li tag="8" class="unchecked" style="width: 155.1px;"><span class="text">文章发表</span><a></a><span class="top">2018-11-01</span><span class="bottom"><span class="plus">+</span></span></li></ul></div>
+            </div>
+            <div id="report_content" class="sy-prItem" style="padding-top: 0px;">
+                <div class="sy-prTitle" style="z-index: 9; position: relative; width: 100%;">
+                    <span class="update-time" style="float:left;">进展报告更新时间：2017年11月25日 00时00分05秒</span>
+                        <a class="btn btn-small btn-primary export-images" style="float:right;">保存全部图片</a>
+                </div>
+                <div class="sy-prContent chartContent">
+                    <app-root></app-root>
+                </div>
+            </div>
+
+</div>
+
+
+
+
+        </div>
+    </section>
+
+    <!-- javascript -->
+    <script src="./assets/old/jquery"></script>
+
+
+    <script src="./assets/old/jquery-1.8.1.min.js.下载"></script>
+    <script src="./assets/old/bootstrap.js.下载"></script>
+    <script src="./assets/old/jobsdesk.js.下载"></script>
+
+    <script type="text/javascript" src="./assets/old/jquery.metadata.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/jquery.validate.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/jquery.validate.message-zh_CN.js.下载"></script>
+    <script src="./assets/old/jquery.easyui.min-1.4.1.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/easyui-lang-zh_CN.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/bootstrap.min.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/stilearn-base.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/bootstrap-colorpicker.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/bootstrap-datepicker.js.下载"></script>
+
+    <script type="text/javascript" src="./assets/old/jquery.ui.widget.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/jquery.iframe-transport.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/jquery.fileupload.js.下载"></script>
+
+    <script type="text/javascript" src="./assets/old/jquery-ui.autocomplete.1.11.2.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/app.jquey-ui.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/moment.min.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/app.core.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/app.ui.js.下载"></script>
+
+    <script type="text/javascript" src="./assets/old/jquery.validate.unobtrusive.min.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/jquery.unobtrusive-ajax.min.js.下载"></script>
+
+    <script type="text/javascript" src="./assets/old/layer.js.下载"></script>
+
+
+    <!--DM核查确认，冻结，锁定页面公用的js文件（treegrid的扩展方法）-->
+    <!--此js只适用于对treegrid父节点进行分页的扩展，若不分页，则需要另一个js-->
+    <script src="./assets/old/study.crf.field.check.js.下载"></script>
+    <!-------------------------------------------------------------------------------
+    Author:  LDH
+      Date:  2016-1-29
+    Remark:【悬浮文本提示】text,textArea,DropDownList
+    --------------------------------------------------------------------------------->
+    <script src="./assets/old/tipInfoForControls.js.下载"></script>
+    <!------------------------------------------------------------------------------->
+
+    <script type="text/javascript">
+        var jobsdeskmenusdata= {subMenus: [{"title":"工作台","icon":"icon-shouye","link":"../../../Study/StudyManager/StudyProgressIndex/100020","items":[]},{"title":"病例管理","icon":"","link":"","items":[{"text":"病例列表","link":"../../../Study/Patient/PatientList/100020"},{"text":"化验单OCR","link":"../../../Study/Datasource/OCRList/100020"}]},{"title":"数据管理","icon":"","link":"","items":[{"text":"质疑管理","link":"../../../Study/Patient/RuleQueryList/100020"},{"text":"签名管理","link":"../../../Study/QualityMonitor/SignIndexPI/100020"}]},{"title":"课题管理","icon":"","link":"","items":[{"text":"文档管理","link":"../../../Vdisk/Document/StudyFolderList/100020"},{"text":"培训管理","link":"../../../Vdisk/Training/Index/100020"},{"text":"课题报表","link":"../../../Study/StudyReport/StudyReportIndex/100020"}]},{"title":"课题设置","icon":"","link":"","items":[{"text":"基本设置","link":"../../../Study/Patient/StudyEdit/100020"},{"text":"中心管理","link":"../../../Study/Site/List/100020"},{"text":"角色管理","link":"../../../Study/Setting/RoleList/100020"},{"text":"成员管理","link":"../../../Study/StudyUser/StudySiteuser/100020"},{"text":"CRF查看","link":"../../../Study/Patient/StudyCRF/100020"}]},{"title":"知识库","icon":"","link":"","items":[{"text":"正常值范围","link":"../../../Master/Regular/CenterLib/100020"}]},{"title":"随访管理","icon":"","link":"","items":[{"text":"随访设置","link":"../../../Study/EasyFollowup/Setup/100020"},{"text":"患者管理","link":"../../../Study/EasyFollowup/PatientManager/100020"},{"text":"随访日历","link":"../../../Study/EasyFollowup/CalendarManager/100020"},{"text":"电话随访","link":"../../../Study/EasyFollowup/CallinManager/100020"},{"text":"患者答疑","link":"../../../Study/EasyFollowup/QAManager/100020"}]}]};;
+        var token = $('<input name="__RequestVerificationToken" type="hidden" value="5RHvGu6YeN04NpqiorCmuQhx7TO9MaWFcBv567WZ977mloObNMPBrO_UsbSt9f_XYNiObZ9EuEnQLbC4sw844PSZFMF0R3_pZnWiPudjV3Q1" />').val();
+        $(function () {
+            $(document).ajaxSend(function (e, jqXHR, ajaxOpt) {
+                jqXHR.setRequestHeader("__RequestVerificationToken", token);
+            });
+            $('form').each(function () {
+                var tokenInput = $(this).find("input[name=__RequestVerificationToken]");
+                if (tokenInput.length==0) {
+                    $(this).append('<input type="hidden" name="__RequestVerificationToken" value="' + token + '" />');
+                }
+            });
+
+            //请保证顶级页面调用SessionKeep,弹窗或iframe引用的页面需要禁用掉SessionKeep，否则会多次弹窗提示重新验证密码
+            Sessionkeep();
+        });
+
+        var relogin = false;
+        var dlglogin = new MyAppDialog(440,300,{onClose:function(){
+            if(!relogin){
+                location.href = "/Member/Logout";
+            }else{
+                setTimeout('Sessionkeep()', 120000);
+            }
+        }});
+
+        //检测用户状态（必须是get,no cache）
+        function Sessionkeep() {
+            $.ajax({
+                type: "GET",
+                url: "/Member/KeepSession",
+                data: { id: '10000030' },
+                cache: false,
+                success: function (mes) {
+                    if (mes == "1001") {//账户重复登录
+                        relogin = false;
+                        dlglogin.setURL("提醒", "/Member/Logincheck");
+                        dlglogin.show();
+                    } else if (mes == "1002") {//已切换账号登录
+                        location.href = location.href;
+                    } else if (mes == "1004") {//登陆过保护期
+                        relogin = false;
+                        dlglogin.setURL("您登陆系统已超过两小时，请重新登陆！", "/Member/ReLogin");
+                        dlglogin.show({ closable: false });
+                    } else if (mes == "1005") {//长时间未交互，直接退出系统，数据丢失不管。
+                        location.href = "/Member/Logout?backurl=" + encodeURIComponent(location.pathname);
+                        //dlglogin.setURL("由于您长时间未操作，请重新登陆！", "/Member/ReLogin");
+                        //dlglogin.show({ closable: false });
+                    } else {
+                        setTimeout('Sessionkeep()', 120000);
+                    }
+                }
+            });
+        }
+
+        function BackIndex()
+        {
+            window.location.href = "/Study/Patient/Index";
+        }
+
+        function goToReport(href) {
+            var url = $(href).attr('href');
+            if (url !='#none') {
+                window.open(url, "_blank");
+            }
+            return false;
+        }
+
+    </script>
+
+
+    <script>
+        var studyid =  100020;
+        var studyType = 0;
+        var isMuiltisite = 1;
+        var requirePatientCnt = 0;
+        var IngroupPatientCnt = 8;
+        // 任务列表权限
+        var canTask = true;
+        // 进展报告导出权限
+        var canExport = true;
+        var canView = true;
+        // 课题进度编辑权限
+        var canScheduleEdit = true;
+        var canScheduleView = true;
+        var canQUery=true;
+        var canStudyTask=true;
+
+    </script>
+    <script type="text/javascript" src="./assets/old/jquery.linq.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/echarts3.2.3.min.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/macarons.js.下载"></script>
+    <script type="text/javascript" src="./assets/old/study.studyprogress.js.下载"></script>
+
+</body></html>

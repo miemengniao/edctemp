@@ -1,0 +1,104 @@
+﻿/** 
+     * 扩展树表格级联勾选方法： 
+     * @param {Object} container 
+     * @param {Object} options 
+     * @return {TypeName}  
+
+
+     本扩展只适用于Treegrid加载结合Datagrid分页使用，纯treegrid不适用
+
+     分页说明：由于加载的是病例+访视的Tree，所以分页先对病例分页，然后分别加载病例的访视子节点（并非对所有节点分页）
+
+     考虑病例太多加载速度慢，所以采取这种类分页方式
+
+     */
+if ($.fn.treegrid && $.fn.datagrid) {
+    $.extend($.fn.treegrid.methods, {
+        /** 
+         * 级联选择 
+         * @param {Object} target 
+         * @param {Object} param  
+         *      param包括两个参数: 
+         *          id:勾选的节点ID 
+         *          deepCascade:是否深度级联 
+         * @return {TypeName}  
+         */
+        cascadeCheck: function (target, param) {
+            //因为只能绑定到单行的单击事件，无法绑定到某一行的checkbox
+            //所以单击行的时候要判断 是否是checkbox 获得了焦点
+            var focusElementType = document.activeElement.localName;
+            if (focusElementType != "input") {
+                return;
+            }
+
+            var opts = $.data(target[0], "treegrid").options;
+
+            var idField = opts.idField;//这里的idField其实就是API里方法的id参数  
+
+            var status = false;//用来标记当前节点的状态，true:勾选，false:未勾选  
+
+            status = $("input[data-id='" + param.id + "']").prop("checked");
+
+            //先处理所有的子节点
+            selectChildren(target[0], param.id, idField, param.deepCascade, status);
+
+            //处理父节点
+            selectParent(target[0], param.id, idField, param.deepCascade, status);
+
+            /** 
+             * 级联选择父节点 
+             * @param {Object} target 
+             * @param {Object} id 节点ID 
+             * @param {Object} status 节点状态，true:勾选，false:未勾选 
+             * @return {TypeName}  
+             *  由于不存在递归父节点，所以可以不用考虑
+             */
+            function selectParent(target, id, idField, status) {
+                //2.0,1.0的改版
+                var current = $("input[data-id='" + id + "']");
+                var parent2 = $(current).closest('.treegrid-tr-tree').prev().find('td');
+                var parentId;
+                if (parent2.length > 0) {//大于0只是代表有子节点，不代表有几个
+                    //如果
+                    parentId = parent2[0];
+
+                    parentId = $(parentId).find('div').html();
+                    var children = $(target).treegrid('getChildren', parentId);
+                    for (var i = 0; i < children.length; i++) {
+                        var childId = children[i][idField];
+                        if ($("input[data-id='" + childId + "']").prop('checked') == false) {
+                            status = false;
+                        }
+                    }
+                    if (parentId) {
+                        $("input[data-id='" + parentId + "']").prop("checked", status);
+                    }
+                    selectParent(target, parentId, idField, status)
+                }
+            }
+            /** 
+             * 级联选择子节点 
+             * @param {Object} target 
+             * @param {Object} id 节点ID 
+             * @param {Object} deepCascade 是否深度级联 
+             * @param {Object} status 节点状态，true:勾选，false:未勾选 
+             * @return {TypeName}  
+             */
+            function selectChildren(target, id, idField, deepCascade, status) {
+                //深度级联时先展开节点  
+                if (!status && deepCascade)
+                    $(target).treegrid('expand', id);
+                //根据ID获取下层孩子节点  
+                var children = $(target).treegrid('getChildren', id);
+                for (var i = 0; i < children.length; i++) {
+                    var childId = children[i][idField];
+                    if (status)
+                        $("input[data-id='" + childId + "']").prop('checked', true);
+                    else
+                        $("input[data-id='" + childId + "']").prop('checked', false);
+                    selectChildren(target, childId, idField, deepCascade, status);//递归选择子节点  
+                }
+            }
+        }
+    });
+}
